@@ -12,21 +12,24 @@ function Header() {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <header className="sticky top-0 z-50 glass-panel border-b border-white/5 py-4 px-6 md:px-12 flex items-center justify-between shadow-md">
-      <Link to="/" className="flex items-center gap-2.5 group">
-        <div className="p-2 rounded-lg bg-violet-600/90 text-white shadow-md shadow-violet-600/20 group-hover:scale-105 transition-all">
-          <ShieldCheck className="w-5 h-5" />
+    <header className="sticky top-0 z-50 bg-[#0a0a0a] border-b-2 border-white py-4 px-6 md:px-12 flex items-center justify-between">
+      <Link to="/" className="flex items-center gap-3 group">
+        <div className="p-2 bg-[#7c3aed] border-2 border-white group-hover:-translate-y-0.5 transition-transform"
+          style={{ boxShadow: '3px 3px 0px #fff' }}>
+          <ShieldCheck className="w-5 h-5 text-white" />
         </div>
-        <span className="font-mono text-base md:text-lg font-bold tracking-tight text-white group-hover:text-violet-400 transition-colors">
-          DRM<span className="text-violet-500">Shield</span>.io
+        <span className="font-mono text-base md:text-lg font-black tracking-tight text-white uppercase">
+          DRM<span className="text-[#7c3aed]">Shield</span>
         </span>
       </Link>
 
-      <nav className="flex items-center gap-6">
+      <nav className="flex items-center gap-2 md:gap-4">
         <Link
           to="/"
-          className={`flex items-center gap-1.5 text-xs md:text-sm font-semibold transition-colors duration-200 ${
-            isActive('/') ? 'text-violet-400 font-bold' : 'text-gray-400 hover:text-white'
+          className={`flex items-center gap-1.5 text-xs md:text-sm font-bold uppercase tracking-wide px-3 py-1.5 border-2 transition-all duration-75 ${
+            isActive('/')
+              ? 'bg-[#7c3aed] border-white text-white'
+              : 'bg-transparent border-transparent text-gray-400 hover:border-white/40 hover:text-white'
           }`}
         >
           <Film className="w-4 h-4" />
@@ -34,8 +37,10 @@ function Header() {
         </Link>
         <Link
           to="/upload"
-          className={`flex items-center gap-1.5 text-xs md:text-sm font-semibold transition-colors duration-200 ${
-            isActive('/upload') ? 'text-violet-400 font-bold' : 'text-gray-400 hover:text-white'
+          className={`flex items-center gap-1.5 text-xs md:text-sm font-bold uppercase tracking-wide px-3 py-1.5 border-2 transition-all duration-75 ${
+            isActive('/upload')
+              ? 'bg-[#7c3aed] border-white text-white'
+              : 'bg-transparent border-transparent text-gray-400 hover:border-white/40 hover:text-white'
           }`}
         >
           <Upload className="w-4 h-4" />
@@ -48,8 +53,8 @@ function Header() {
 
 function Footer() {
   return (
-    <footer className="py-6 border-t border-white/5 text-center text-xs text-gray-500 font-mono">
-      &copy; {new Date().getFullYear()} DRMShield Video Player Prototype. Secured client-side environment.
+    <footer className="border-t-2 border-white/10 py-5 text-center text-xs text-gray-600 font-mono uppercase tracking-widest">
+      &copy; {new Date().getFullYear()} DRMShield Video Player Prototype — Secured client-side environment
     </footer>
   );
 }
@@ -59,7 +64,6 @@ export default function App() {
   const [rightClickBlur, setRightClickBlur] = useState(false);
 
   useKeyboardProtection();
-
   const devToolsStatus = useDevTools();
 
   useEffect(() => {
@@ -70,7 +74,6 @@ export default function App() {
         .catch(() => {});
     };
     const handleFocus = () => setWindowFocused(true);
-
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
     return () => {
@@ -96,10 +99,10 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="flex flex-col min-h-screen bg-brand-dark text-gray-100 relative">
+      <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-gray-100 relative">
         <div className={`flex flex-col min-h-screen transition-all duration-300 ${isBlurred ? 'blur-xl select-none pointer-events-none' : ''}`}>
           <Header />
-          <main className="flex-grow container mx-auto px-4 md:px-8 py-6">
+          <main className="flex-grow container mx-auto px-4 md:px-8 py-8">
             <Routes>
               <Route path="/" element={<LibraryPage />} />
               <Route path="/upload" element={<UploadPage />} />
@@ -107,15 +110,13 @@ export default function App() {
               <Route
                 path="*"
                 element={
-                  <div className="text-center py-20">
-                    <h2 className="text-2xl font-bold text-white mb-2">404 - Page Not Found</h2>
-                    <p className="text-gray-400 text-sm mb-6">The page you are looking for does not exist.</p>
-                    <Link
-                      to="/"
-                      className="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2.5 px-6 rounded-xl transition-all"
-                    >
-                      Return to Library
-                    </Link>
+                  <div className="text-center py-24">
+                    <div className="inline-block brutal-card p-10 max-w-md">
+                      <p className="font-mono text-6xl font-black text-[#7c3aed] mb-4">404</p>
+                      <h2 className="text-xl font-black text-white uppercase tracking-wide mb-2">Page Not Found</h2>
+                      <p className="text-gray-400 text-sm mb-8">The page you are looking for does not exist.</p>
+                      <Link to="/" className="brutal-btn">Return to Library</Link>
+                    </div>
                   </div>
                 }
               />
@@ -125,12 +126,12 @@ export default function App() {
         </div>
 
         {!windowFocused && (
-          <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/80 z-[100] text-center px-4">
-            <div className="glass-panel p-6 rounded-2xl border border-white/10 max-w-sm">
-              <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-              <h2 className="text-lg md:text-xl font-bold text-white mb-1">App Paused</h2>
-              <p className="text-gray-400 text-xs md:text-sm">
-                Window Focus Lost. Re-focus window to resume.
+          <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/90 z-[100] text-center px-4">
+            <div className="brutal-card p-8 max-w-sm w-full">
+              <AlertTriangle className="w-12 h-12 text-[#f59e0b] mx-auto mb-4" />
+              <h2 className="text-lg font-black text-white uppercase tracking-wide mb-1">App Paused</h2>
+              <p className="text-gray-400 text-sm font-mono">
+                Window focus lost — re-focus to resume.
               </p>
             </div>
           </div>
