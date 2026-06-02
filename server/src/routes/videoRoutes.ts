@@ -106,6 +106,17 @@ router.get('/videos', (_req: Request, res: Response): void => {
   res.status(200).json(getVideosList());
 });
 
+// GET /api/videos/:filename — single video metadata
+router.get('/videos/:filename', (req: Request, res: Response, next: NextFunction): void => {
+  const safeFilename = path.basename(req.params.filename);
+  const video = getVideosList().find((v) => v.filename === safeFilename);
+  if (!video) {
+    next(new AppError('Video metadata not found', 404));
+    return;
+  }
+  res.status(200).json(video);
+});
+
 // GET /api/video/:filename
 router.get('/video/:filename', (req: Request, res: Response, next: NextFunction): void => {
   const safeFilename = path.basename(req.params.filename);
