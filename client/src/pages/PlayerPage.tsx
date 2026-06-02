@@ -49,241 +49,235 @@ export default function PlayerPage() {
         setLoading(false);
       }
     };
-
     fetchVideoDetails();
   }, [filename]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 flex-grow">
+    <div className="max-w-6xl mx-auto">
+      {/* Back */}
       <div className="mb-6">
         <Link
           to="/"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm font-semibold group"
+          className="brutal-btn-ghost text-sm inline-flex items-center gap-2"
         >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          Back to Video Library
+          <ArrowLeft className="w-4 h-4" />
+          Back to Library
         </Link>
       </div>
 
       {loading ? (
-        <div className="space-y-6">
-          <div className="aspect-video w-full bg-white/5 rounded-xl animate-pulse" />
-          <div className="h-6 bg-white/10 rounded w-1/3 animate-pulse" />
+        <div className="space-y-4">
+          <div className="aspect-video w-full bg-[#111] border-2 border-white/10 animate-pulse" />
+          <div className="h-6 bg-white/10 w-1/3 animate-pulse" />
         </div>
       ) : error ? (
-        <div className="text-center py-16 bg-red-950/20 border border-red-500/20 rounded-2xl max-w-xl mx-auto p-8">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <p className="text-red-400 font-semibold text-lg mb-2">Streaming Error</p>
-          <p className="text-gray-400 text-sm mb-6">{error}</p>
-          <Link
-            to="/"
-            className="bg-violet-600 hover:bg-violet-500 text-white font-semibold py-2 px-5 rounded-xl transition-all"
-          >
-            Return to Library
-          </Link>
+        <div className="brutal-card-danger p-10 max-w-xl mx-auto text-center">
+          <AlertCircle className="w-12 h-12 text-[#ef4444] mx-auto mb-4" />
+          <p className="text-[#ef4444] font-black text-lg uppercase tracking-wide mb-2">Streaming Error</p>
+          <p className="text-gray-400 text-sm font-mono mb-6">{error}</p>
+          <Link to="/" className="brutal-btn">Return to Library</Link>
         </div>
       ) : video ? (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-4">
-              <VideoPlayer
-                src={`${API_BASE}/video/${video.filename}`}
-                title={video.title}
-                focusLossDetectEnabled={focusLossDetectEnabled}
-                rightClickProtectEnabled={rightClickProtectEnabled}
-                keyboardProtectEnabled={keyboardProtectEnabled}
-                watermarkEnabled={watermarkEnabled}
-                screenRecordWarningEnabled={screenRecordWarningEnabled}
-              />
-              <div>
-                <h1 className="text-2xl font-bold text-white mb-1">{video.title}</h1>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 font-mono">
-                  <span className="text-gray-500">File:</span>
-                  <span className="truncate max-w-[220px]" title={video.originalName}>{video.originalName}</span>
-                  <span className="text-gray-700">|</span>
-                  <span className="text-gray-500">Uploaded:</span>
-                  <span>{formatDate(video.uploadDate, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                  <span className="text-gray-700">|</span>
-                  <span className="text-gray-500">Size:</span>
-                  <span>{formatBytes(video.size)}</span>
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Player column */}
+          <div className="lg:col-span-2 space-y-4">
+            <VideoPlayer
+              src={`${API_BASE}/video/${video.filename}`}
+              title={video.title}
+              focusLossDetectEnabled={focusLossDetectEnabled}
+              rightClickProtectEnabled={rightClickProtectEnabled}
+              keyboardProtectEnabled={keyboardProtectEnabled}
+              watermarkEnabled={watermarkEnabled}
+              screenRecordWarningEnabled={screenRecordWarningEnabled}
+            />
+            <div className="border-l-4 border-[#7c3aed] pl-4">
+              <h1 className="text-xl font-black text-white uppercase tracking-wide mb-1">{video.title}</h1>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 font-mono">
+                <span>File: <span className="text-gray-400 truncate max-w-[180px] inline-block align-bottom">{video.originalName}</span></span>
+                <span>·</span>
+                <span>Uploaded: <span className="text-gray-400">{formatDate(video.uploadDate, { year: 'numeric', month: 'long', day: 'numeric' })}</span></span>
+                <span>·</span>
+                <span>Size: <span className="text-gray-400">{formatBytes(video.size)}</span></span>
               </div>
             </div>
+          </div>
 
-            <div className="space-y-6">
-              <div className="glass-panel border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden flex flex-col h-full justify-between">
-                <div className="absolute -top-16 -right-16 w-32 h-32 bg-violet-600/5 rounded-full blur-2xl pointer-events-none" />
+          {/* Security Monitor */}
+          <div>
+            <div className="brutal-card p-5 flex flex-col gap-0">
+              {/* Panel header */}
+              <div className="flex items-center gap-2 pb-4 mb-4 border-b-2 border-white/10">
+                <ShieldAlert className="w-5 h-5 text-[#7c3aed]" />
+                <h3 className="font-black text-white text-sm font-mono uppercase tracking-widest">
+                  Security Monitor
+                </h3>
+              </div>
 
-                <div>
-                  <div className="flex items-center gap-2 pb-4 mb-4 border-b border-white/5">
-                    <ShieldAlert className="w-5 h-5 text-violet-400" />
-                    <h3 className="font-bold text-white text-base font-mono uppercase tracking-wider">
-                      Security Monitor
-                    </h3>
+              <p className="text-xs text-gray-500 font-mono leading-relaxed mb-5">
+                Toggle client-side protection layers to demonstrate lockouts or adjust for DPI false positives.
+              </p>
+
+              {/* Toggle rows */}
+              <div className="space-y-0">
+                {/* DevTools */}
+                <SecurityRow
+                  icon={<Cpu className="w-4 h-4" />}
+                  label="DevTools Detection"
+                  badge={
+                    devToolsDetectEnabled
+                      ? devToolsStatus.isOpen
+                        ? <span className="brutal-badge brutal-badge-red animate-pulse">LOCKOUT</span>
+                        : <span className="brutal-badge brutal-badge-green">PASS</span>
+                      : <span className="brutal-badge brutal-badge-gray">DISABLED</span>
+                  }
+                  checked={devToolsDetectEnabled}
+                  onChange={setDevToolsDetectEnabled}
+                />
+
+                <SecurityRow
+                  icon={<Lock className="w-4 h-4" />}
+                  label="Right-Click Menu"
+                  badge={
+                    <span className={`brutal-badge ${rightClickProtectEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>
+                      {rightClickProtectEnabled ? 'BLOCKED' : 'ALLOW'}
+                    </span>
+                  }
+                  checked={rightClickProtectEnabled}
+                  onChange={setRightClickProtectEnabled}
+                />
+
+                <SecurityRow
+                  icon={<Lock className="w-4 h-4" />}
+                  label="Shortcuts (F12, Inspect)"
+                  badge={
+                    <span className={`brutal-badge ${keyboardProtectEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>
+                      {keyboardProtectEnabled ? 'BLOCKED' : 'ALLOW'}
+                    </span>
+                  }
+                  checked={keyboardProtectEnabled}
+                  onChange={setKeyboardProtectEnabled}
+                />
+
+                <SecurityRow
+                  icon={<Eye className="w-4 h-4" />}
+                  label="Focus Loss Pause"
+                  badge={
+                    <span className={`brutal-badge ${focusLossDetectEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>
+                      {focusLossDetectEnabled ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  }
+                  checked={focusLossDetectEnabled}
+                  onChange={setFocusLossDetectEnabled}
+                />
+
+                <SecurityRow
+                  icon={<Sparkles className="w-4 h-4" />}
+                  label="Floating Watermark"
+                  badge={
+                    <span className={`brutal-badge ${watermarkEnabled ? 'brutal-badge-violet animate-pulse' : 'brutal-badge-gray'}`}>
+                      {watermarkEnabled ? 'MOVING' : 'OFF'}
+                    </span>
+                  }
+                  checked={watermarkEnabled}
+                  onChange={setWatermarkEnabled}
+                />
+
+                <SecurityRow
+                  icon={<AlertCircle className="w-4 h-4" />}
+                  label="Capture Warning"
+                  badge={
+                    <span className={`brutal-badge ${screenRecordWarningEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>
+                      {screenRecordWarningEnabled ? 'ACTIVE' : 'OFF'}
+                    </span>
+                  }
+                  checked={screenRecordWarningEnabled}
+                  onChange={setScreenRecordWarningEnabled}
+                />
+
+                {/* Static proxied row */}
+                <div className="flex items-center justify-between py-2.5 border-t-2 border-white/5">
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <FileText className="w-4 h-4" />
+                    <span className="text-xs font-mono">File Direct Access</span>
                   </div>
+                  <span className="brutal-badge brutal-badge-amber">PROXIED</span>
+                </div>
+              </div>
 
-                  <p className="text-xs text-gray-400 leading-relaxed mb-6">
-                    This panel controls active client-side visual security features. Toggle specific items to demonstrate lockouts or adjust for DPI false positives.
-                  </p>
+              {/* Diagnostics drawer */}
+              <div className="mt-5 border-t-2 border-white/10 pt-4">
+                <button
+                  onClick={() => setShowDiagnostics(!showDiagnostics)}
+                  className="w-full flex items-center justify-between text-[10px] text-gray-600 font-mono uppercase tracking-widest hover:text-gray-300 transition-colors"
+                >
+                  <span>DPI &amp; Dimension Diagnostics</span>
+                  {showDiagnostics ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
 
-                  <div className="space-y-3.5">
-                    <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <Cpu className="w-4 h-4 text-gray-500" />
-                        <span className="text-gray-300 font-medium">DevTools Detection</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {devToolsDetectEnabled ? (
-                          devToolsStatus.isOpen ? (
-                            <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-red-950 text-red-400 border border-red-500/20 font-mono animate-pulse">
-                              LOCKOUT
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-emerald-950 text-emerald-400 border border-emerald-500/15 font-mono">
-                              PASS
-                            </span>
-                          )
-                        ) : (
-                          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-gray-950 text-gray-400 border border-white/5 font-mono">
-                            DISABLED
-                          </span>
-                        )}
-                        <ToggleSwitch checked={devToolsDetectEnabled} onChange={setDevToolsDetectEnabled} />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <Lock className="w-4 h-4 text-gray-500" />
-                        <span className="text-gray-300 font-medium">Right-Click Context Menu</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase font-mono ${rightClickProtectEnabled ? 'bg-violet-950 text-violet-400 border border-violet-500/15' : 'bg-gray-950 text-gray-400 border border-white/5'}`}>
-                          {rightClickProtectEnabled ? 'BLOCKED' : 'ALLOW'}
-                        </span>
-                        <ToggleSwitch checked={rightClickProtectEnabled} onChange={setRightClickProtectEnabled} />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <Lock className="w-4 h-4 text-gray-500" />
-                        <span className="text-gray-300 font-medium">Shortcuts (F12, Inspect)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase font-mono ${keyboardProtectEnabled ? 'bg-violet-950 text-violet-400 border border-violet-500/15' : 'bg-gray-950 text-gray-400 border border-white/5'}`}>
-                          {keyboardProtectEnabled ? 'BLOCKED' : 'ALLOW'}
-                        </span>
-                        <ToggleSwitch checked={keyboardProtectEnabled} onChange={setKeyboardProtectEnabled} />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <Eye className="w-4 h-4 text-gray-500" />
-                        <span className="text-gray-300 font-medium">Focus Loss Pause</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase font-mono ${focusLossDetectEnabled ? 'bg-violet-950 text-violet-400 border border-violet-500/15' : 'bg-gray-950 text-gray-400 border border-white/5'}`}>
-                          {focusLossDetectEnabled ? 'ACTIVE' : 'INACTIVE'}
-                        </span>
-                        <ToggleSwitch checked={focusLossDetectEnabled} onChange={setFocusLossDetectEnabled} />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-gray-500" />
-                        <span className="text-gray-300 font-medium">Floating Watermark</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase font-mono ${watermarkEnabled ? 'bg-violet-950 text-violet-400 border border-violet-500/15 animate-pulse' : 'bg-gray-950 text-gray-400 border border-white/5'}`}>
-                          {watermarkEnabled ? 'MOVING' : 'OFF'}
-                        </span>
-                        <ToggleSwitch checked={watermarkEnabled} onChange={setWatermarkEnabled} />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-gray-500" />
-                        <span className="text-gray-300 font-medium">Screen Capture Warning</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase font-mono ${screenRecordWarningEnabled ? 'bg-violet-950 text-violet-400 border border-violet-500/15' : 'bg-gray-950 text-gray-400 border border-white/5'}`}>
-                          {screenRecordWarningEnabled ? 'ACTIVE' : 'OFF'}
-                        </span>
-                        <ToggleSwitch checked={screenRecordWarningEnabled} onChange={setScreenRecordWarningEnabled} />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs pb-1">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-gray-500" />
-                        <span className="text-gray-300 font-medium">File Direct Access</span>
-                      </div>
-                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-amber-950 text-amber-400 border border-amber-500/20 font-mono">
-                        PROXIED
-                      </span>
+                {showDiagnostics && (
+                  <div className="mt-3 space-y-1 text-[9px] font-mono text-gray-600 bg-[#0a0a0a] border-2 border-white/10 p-3">
+                    <DiagRow label="DPR:" value={String(devToolsStatus.devicePixelRatio)} />
+                    <DiagRow label="Outer W×H:" value={`${devToolsStatus.outerWidth} × ${devToolsStatus.outerHeight} px`} />
+                    <DiagRow label="Inner W×H:" value={`${devToolsStatus.innerWidth} × ${devToolsStatus.innerHeight} px`} />
+                    <DiagRow
+                      label="Width Diff:"
+                      value={`${devToolsStatus.cssDiffW} px`}
+                      highlight={devToolsStatus.cssDiffW > 200}
+                    />
+                    <DiagRow
+                      label="Height Diff:"
+                      value={`${devToolsStatus.cssDiffH} px`}
+                      highlight={devToolsStatus.cssDiffH > 200}
+                    />
+                    <div className="border-t border-white/5 pt-1 mt-1">
+                      <DiagRow label="Console Hook:" value={devToolsStatus.consoleHookTriggered ? 'YES' : 'NO'} highlight={devToolsStatus.consoleHookTriggered} />
+                      <DiagRow label="Size Locked:" value={devToolsStatus.dimensionsTriggered ? 'YES' : 'NO'} highlight={devToolsStatus.dimensionsTriggered} />
                     </div>
                   </div>
-                </div>
-
-                <div className="mt-6 border-t border-white/5 pt-4">
-                  <button
-                    onClick={() => setShowDiagnostics(!showDiagnostics)}
-                    className="w-full flex items-center justify-between text-[10px] text-gray-400 font-mono hover:text-white transition-colors"
-                  >
-                    <span>DPI & DIMENSION DIAGNOSTICS</span>
-                    {showDiagnostics ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </button>
-
-                  {showDiagnostics && (
-                    <div className="mt-3 space-y-1.5 text-[9px] font-mono text-gray-500 bg-black/40 rounded-lg p-3 border border-white/5 animate-fadeIn">
-                      <div className="flex justify-between">
-                        <span>Device Pixel Ratio (DPR):</span>
-                        <span className="text-gray-300">{devToolsStatus.devicePixelRatio}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Outer Window W x H:</span>
-                        <span className="text-gray-300">{devToolsStatus.outerWidth} x {devToolsStatus.outerHeight} px</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Inner Viewport W x H:</span>
-                        <span className="text-gray-300">{devToolsStatus.innerWidth} x {devToolsStatus.innerHeight} px</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Corrected Width Diff:</span>
-                        <span className={`font-semibold ${devToolsStatus.cssDiffW > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
-                          {devToolsStatus.cssDiffW} px
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Corrected Height Diff:</span>
-                        <span className={`font-semibold ${devToolsStatus.cssDiffH > 200 ? 'text-red-400' : 'text-emerald-400'}`}>
-                          {devToolsStatus.cssDiffH} px
-                        </span>
-                      </div>
-                      <div className="flex justify-between border-t border-white/5 pt-1.5 mt-1.5">
-                        <span>Console Hook Fired:</span>
-                        <span className={devToolsStatus.consoleHookTriggered ? 'text-red-400' : 'text-gray-400'}>
-                          {devToolsStatus.consoleHookTriggered ? 'YES' : 'NO'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Size Check Locked:</span>
-                        <span className={devToolsStatus.dimensionsTriggered ? 'text-red-400' : 'text-gray-400'}>
-                          {devToolsStatus.dimensionsTriggered ? 'YES' : 'NO'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+interface SecurityRowProps {
+  icon: React.ReactNode;
+  label: string;
+  badge: React.ReactNode;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}
+
+function SecurityRow({ icon, label, badge, checked, onChange }: SecurityRowProps) {
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b-2 border-white/5">
+      <div className="flex items-center gap-2 text-gray-500">
+        {icon}
+        <span className="text-xs font-mono text-gray-300">{label}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        {badge}
+        <ToggleSwitch checked={checked} onChange={onChange} />
+      </div>
+    </div>
+  );
+}
+
+interface DiagRowProps {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}
+
+function DiagRow({ label, value, highlight = false }: DiagRowProps) {
+  return (
+    <div className="flex justify-between">
+      <span>{label}</span>
+      <span className={highlight ? 'text-[#ef4444] font-bold' : 'text-gray-400'}>{value}</span>
     </div>
   );
 }

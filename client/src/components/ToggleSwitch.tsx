@@ -12,7 +12,19 @@ export default function ToggleSwitch({ checked, onChange }: ToggleSwitchProps) {
         onChange={(e) => onChange(e.target.checked)}
         className="sr-only peer"
       />
-      <div className="w-8 h-4 bg-gray-800 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-violet-600 peer-checked:after:bg-white" />
+      {/* Track */}
+      <div
+        className="w-9 h-5 border-2 border-white transition-colors duration-100 peer-checked:bg-[#7c3aed] bg-[#1a1a1a]"
+        style={{ borderRadius: '2px' }}
+      >
+        {/* Thumb */}
+        <div
+          className={`absolute top-[3px] w-3 h-3 bg-white transition-transform duration-100 ${
+            checked ? 'translate-x-[18px]' : 'translate-x-[3px]'
+          }`}
+          style={{ borderRadius: '1px' }}
+        />
+      </div>
     </label>
   );
 }
