@@ -31,22 +31,29 @@ Server runs on port 5000 (hardcoded, or `PORT` env var). Client Vite dev server 
 
 ```
 client/src/
-  App.jsx                    # Router + global protections mounted here
-  components/VideoPlayer.jsx # Core DRM logic (~400 LOC)
-  hooks/useDevTools.js       # DevTools detection → unmounts app
-  hooks/useKeyboardProtection.js  # Blocks F12, PrintScreen, Ctrl+Shift+I, etc.
-  pages/                     # LibraryPage, UploadPage, PlayerPage
+  App.tsx                         # Router + global protections mounted here
+  main.tsx                        # React entry point
+  types/index.ts                  # Shared TypeScript interfaces (Video, DevToolsStatus, etc.)
+  config/api.ts                   # API_BASE constant
+  utils/format.ts                 # formatBytes, formatDate helpers
+  components/
+    VideoPlayer.tsx               # Core DRM logic
+    ToggleSwitch.tsx              # Reusable toggle component
+  hooks/
+    useDevTools.ts                # DevTools detection → unmounts app
+    useKeyboardProtection.ts      # Blocks F12, PrintScreen, Ctrl+Shift+I, etc.
+  pages/                          # LibraryPage, UploadPage, PlayerPage
 
 server/
   src/
-    app.ts                   # Express setup (CORS, parsers, routes, error handler) — no listen()
-    server.ts                # Entry: ensures dirs exist, calls app.listen()
-    types/video.ts           # Video Zod schema + inferred types
-    middleware/errorHandler.ts  # AppError class + typed global error handler
-    routes/videoRoutes.ts    # Upload (Multer), listing, HTTP range streaming
-  data/videos.json           # Auto-created metadata store (flat file, no DB)
-  dist/                      # Compiled output (gitignored)
-uploads/                     # Raw MP4 files (auto-created, gitignored)
+    app.ts                        # Express setup (CORS, parsers, routes, error handler) — no listen()
+    server.ts                     # Entry: ensures dirs exist, calls app.listen()
+    types/video.ts                # Video Zod schema + inferred types
+    middleware/errorHandler.ts    # AppError class + typed global error handler
+    routes/videoRoutes.ts         # Upload (Multer), listing, HTTP range streaming
+  data/videos.json                # Auto-created metadata store (flat file, no DB)
+  dist/                           # Compiled output (gitignored)
+uploads/                          # Raw MP4 files (auto-created, gitignored)
 ```
 
 ## Key Behaviors
@@ -68,6 +75,16 @@ uploads/                     # Raw MP4 files (auto-created, gitignored)
 
 ## Git Workflow
 
+### Before starting any work
+1. Check current branch: `git branch` — confirm you are NOT on `main`
+2. If on `main` or wrong branch, create or switch to the correct feature branch first:
+   ```bash
+   git checkout -b feat/<name>   # new feature
+   git checkout feat/<name>      # existing branch
+   ```
+3. Never begin changes until you have confirmed the active branch is correct
+
+### Rules
 - Always pull latest before starting work: `git pull origin main`
 - Work on a dedicated feature branch: `git checkout -b feat/<name>`
 - Commits must be small and atomic — one logical change per commit

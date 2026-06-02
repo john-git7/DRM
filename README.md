@@ -1,6 +1,6 @@
-# Secure Video Player Prototype
+# DRMShield — Secure Video Player Prototype
 
-A production-quality prototype of a Secure Video Player web application showcasing aggressive visual and behavior-based client-side digital rights protection mechanisms. Built using **React (Vite + Tailwind CSS v4)** on the frontend and **Node.js (Express + Multer)** on the backend.
+A production-quality prototype of a Secure Video Player web application showcasing aggressive visual and behavior-based client-side digital rights protection mechanisms. Built with **React + TypeScript (Vite + Tailwind CSS v4)** on the frontend and **Node.js + TypeScript (Express + Multer)** on the backend. Styled with a **dark neobrutalism** design language — hard borders, offset shadows, flat surfaces — built for authority and clarity.
 
 ---
 
@@ -26,7 +26,7 @@ This prototype demonstrates advanced visual deterrence, DOM eradication, and run
 4. **Focus Loss & Screen Record Deterrence**
    - Automatically pauses playback and heavily blurs the player if the user switches browser tabs, minimizes the window, or navigates focus elsewhere.
    - If focus is lost, an immediate clipboard rewrite occurs to deter background snipping tools.
-   - Triggers an overlay: *"Playback Paused - Window Focus Lost"*. Multiple quick focus losses trigger a *"Screen Capture Activity Suspected"* warning.
+   - Triggers an overlay: *"Playback Paused — Window Focus Lost"*. Multiple quick focus losses trigger a *"Capture Detected"* warning stamp.
 
 5. **Dynamic Watermarking**
    - Overlays a semi-transparent floating text label containing the username, date, and live time context.
@@ -37,77 +37,110 @@ This prototype demonstrates advanced visual deterrence, DOM eradication, and run
 
 ---
 
+## Design System — Dark Neobrutalism
+
+The UI uses a dark neobrutalism design language applied to a security-terminal context:
+
+| Token | Value | Role |
+|-------|-------|------|
+| Base background | `#0a0a0a` | Page canvas |
+| Surface | `#111111` | Cards, panels |
+| Border | `2px solid #ffffff` | All card/component borders |
+| Hard shadow | `4px 4px 0px #7c3aed` | Violet offset shadow (brand) |
+| Accent | `#7c3aed` | Primary actions, active states |
+| Amber | `#f59e0b` | Warnings, caution badges |
+| Green | `#22c55e` | Pass / success badges |
+| Red | `#ef4444` | Lockout / danger states |
+
+**Key principles:** No glassmorphism, no `backdrop-filter`, no soft drop shadows, no gradients. Flat surfaces + thick borders + hard offset shadows. Security status badges styled as physical rubber stamps (uppercase monospace, square corners, offset shadow in accent color).
+
+---
+
 ## Directory Structure
 
 ```
 d:/DRM/
-├── client/                     # React Frontend
+├── client/                         # React + TypeScript frontend
 │   ├── src/
-│   │   ├── components/         # VideoPlayer.jsx
-│   │   ├── hooks/              # useDevTools.js, useKeyboardProtection.js
-│   │   ├── pages/              # LibraryPage.jsx, UploadPage.jsx, PlayerPage.jsx
-│   │   ├── App.jsx             # Router and layouts
-│   │   └── index.css           # Tailwind v4 configuration and animations
-│   ├── index.html              # Entry DOM structure
-│   └── package.json            # Frontend script dependencies
-├── server/                     # Express Backend
-│   ├── routes/
-│   │   └── videoRoutes.js      # Streaming APIs and Multer uploads
-│   ├── data/
-│   │   └── videos.json         # Mock database store
-│   └── server.js               # Entry script
-├── uploads/                    # Local raw video file directory
-└── README.md                   # Setup guide
+│   │   ├── types/index.ts          # Shared TS interfaces (Video, DevToolsStatus, etc.)
+│   │   ├── config/api.ts           # API_BASE constant
+│   │   ├── utils/format.ts         # formatBytes, formatDate helpers
+│   │   ├── components/
+│   │   │   ├── VideoPlayer.tsx     # Core DRM player logic
+│   │   │   └── ToggleSwitch.tsx    # Reusable toggle component
+│   │   ├── hooks/
+│   │   │   ├── useDevTools.ts      # DevTools detection → app lockout
+│   │   │   └── useKeyboardProtection.ts  # Blocks F12, PrintScreen, Ctrl+Shift+I, etc.
+│   │   ├── pages/
+│   │   │   ├── LibraryPage.tsx     # Video grid with brutal cards
+│   │   │   ├── UploadPage.tsx      # Drag-drop upload with progress
+│   │   │   └── PlayerPage.tsx      # Player + Security Monitor panel
+│   │   ├── App.tsx                 # Router + global protections
+│   │   ├── main.tsx                # React entry point
+│   │   └── index.css               # Tailwind v4 + neobrutalism utilities
+│   ├── tsconfig.json               # Root TS project references
+│   ├── tsconfig.app.json           # App strict TS config
+│   ├── tsconfig.node.json          # Vite config TS
+│   ├── index.html                  # Entry DOM
+│   └── package.json                # Frontend dependencies
+├── server/                         # Express + TypeScript backend
+│   ├── src/
+│   │   ├── app.ts                  # Express setup (CORS, parsers, routes)
+│   │   ├── server.ts               # Entry: dirs, app.listen()
+│   │   ├── types/video.ts          # Video Zod schema + inferred types
+│   │   ├── middleware/errorHandler.ts  # AppError + typed error handler
+│   │   └── routes/videoRoutes.ts   # Upload (Multer), listing, range streaming
+│   ├── data/videos.json            # Flat-file metadata store (auto-created)
+│   └── package.json
+├── uploads/                        # Raw MP4 files (auto-created, gitignored)
+└── README.md
 ```
 
 ---
 
 ## Local Setup & Run Instructions
 
-Ensure [Node.js](https://nodejs.org) (v18+) is installed on your system.
+Requires [Node.js](https://nodejs.org) v18+ and [pnpm](https://pnpm.io) installed.
 
-### 1. Initialize & Start Backend Server
+### 1. Start Backend Server
 
-Open a terminal at the project root and execute the following commands:
-
-```powershell
-# Navigate to server folder
+```bash
 cd server
-
-# Install server packages
-npm install
-
-# Start the dev server (with hot reload via nodemon)
-npm run dev
+pnpm install
+pnpm dev          # ts-node-dev hot reload
 ```
 
-The backend server starts on **`http://localhost:5000`**.
+Server starts on **`http://localhost:5000`**.
 
-### 2. Initialize & Start Frontend Dev Server
+### 2. Start Frontend Dev Server
 
-Open a second terminal at the project root:
-
-```powershell
-# Navigate to client folder
+```bash
 cd client
-
-# Install client packages
-npm install
-
-# Start the Vite React app
-npm run dev
+pnpm install
+pnpm dev          # Vite dev server
 ```
 
-The React client will launch on **`http://localhost:5173`**.
+Client launches on **`http://localhost:5173`**.
+
+### Additional Client Scripts
+
+```bash
+pnpm build        # tsc type check + Vite production build
+pnpm type-check   # TypeScript only (no emit)
+pnpm lint         # ESLint
+pnpm preview      # Preview production build
+```
 
 ---
 
 ## Testing the Prototype
 
 1. Open `http://localhost:5173` in your browser.
-2. Navigate to the **Upload** page, select a test `.mp4` file, input a title, and click **Start Secure Upload**. You'll see an upload progress tracker.
-3. Once completed, navigate to the **Library** page and click the video card to launch the **Secure Video Player**.
-4. Test the extreme security hooks:
-   - Try right-clicking anywhere on the page (notice the permanent blur lock).
-   - Press `PrintScreen` or a snippet shortcut, then try to paste the image into Paint (notice the clipboard was overwritten).
-   - Try opening DevTools via `F12` or the browser menu. The screen will instantly turn black, and the source code will vanish from the Elements tab.
+2. Navigate to the **Upload** page, select a test `.mp4` file, input a title, and click **Start Secure Upload**. You'll see a flat progress bar.
+3. Once completed, navigate to the **Library** page and click a video card to launch the **Secure Video Player**.
+4. Test the security hooks:
+   - Right-click anywhere — notice the permanent blur lockout.
+   - Press `PrintScreen` or a screenshot shortcut, then try pasting — the clipboard has been overwritten.
+   - Open DevTools via `F12` or the browser menu — the screen instantly turns black and source code vanishes.
+   - Switch to another tab — playback pauses and the player blurs.
+   - Open the **Security Monitor** panel to toggle individual protections or inspect real-time DPI diagnostics.
