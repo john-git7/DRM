@@ -1,41 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, ShieldAlert, Sparkles, AlertCircle, Cpu, Eye, Lock, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  ArrowLeft, ShieldAlert, Sparkles, AlertCircle,
+  Cpu, Eye, Lock, FileText, ChevronDown, ChevronUp,
+} from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
+import ToggleSwitch from '../components/ToggleSwitch';
 import { useDevTools } from '../hooks/useDevTools';
+import { API_BASE } from '../config/api';
+import { formatBytes, formatDate } from '../utils/format';
+import type { Video } from '../types';
 
 export default function PlayerPage() {
-  const { filename } = useParams();
-  const [video, setVideo] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { filename = '' } = useParams<{ filename: string }>();
 
-  // Security Toggles
-  const [devToolsDetectEnabled, setDevToolsDetectEnabled] = useState(true);
+  const [video, setVideo] = useState<Video | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [focusLossDetectEnabled, setFocusLossDetectEnabled] = useState(true);
   const [rightClickProtectEnabled, setRightClickProtectEnabled] = useState(true);
   const [keyboardProtectEnabled, setKeyboardProtectEnabled] = useState(true);
   const [watermarkEnabled, setWatermarkEnabled] = useState(true);
   const [screenRecordWarningEnabled, setScreenRecordWarningEnabled] = useState(true);
+  const [devToolsDetectEnabled, setDevToolsDetectEnabled] = useState(true);
 
-  // Diagnostic Drawer State
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
-  // Parent Hook for Dashboard rendering
   const devToolsStatus = useDevTools();
-
-  const API_BASE = 'http://localhost:5000/api';
 
   useEffect(() => {
     const fetchVideoDetails = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_BASE}/videos`);
-        const foundVideo = response.data.find(v => v.filename === filename);
-        
-        if (foundVideo) {
-          setVideo(foundVideo);
+        const response = await axios.get<Video[]>(`${API_BASE}/videos`);
+        const found = response.data.find((v) => v.filename === filename);
+        if (found) {
+          setVideo(found);
           setError(null);
         } else {
           setError('The requested video metadata could not be found.');
@@ -51,41 +53,8 @@ export default function PlayerPage() {
     fetchVideoDetails();
   }, [filename]);
 
-  const formatBytes = (bytes) => {
-    if (!bytes) return '0 Bytes';
-    const k = 1024;
-    const dm = 2;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  // Toggle Switch UI helper
-  const ToggleSwitch = ({ checked, onChange }) => (
-    <label className="relative inline-flex items-center cursor-pointer">
-      <input 
-        type="checkbox" 
-        checked={checked} 
-        onChange={(e) => onChange(e.target.checked)} 
-        className="sr-only peer" 
-      />
-      <div className="w-8 h-4 bg-gray-800 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-violet-600 peer-checked:after:bg-white"></div>
-    </label>
-  );
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 flex-grow">
-      {/* Back button */}
       <div className="mb-6">
         <Link
           to="/"
@@ -113,16 +82,13 @@ export default function PlayerPage() {
             Return to Library
           </Link>
         </div>
-      ) : (
+      ) : video ? (
         <div className="space-y-8">
-          {/* Main Video View */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Player block */}
             <div className="lg:col-span-2 space-y-4">
-              <VideoPlayer 
+              <VideoPlayer
                 src={`${API_BASE}/video/${video.filename}`}
-                title={video.title} 
-                devToolsDetectEnabled={devToolsDetectEnabled}
+                title={video.title}
                 focusLossDetectEnabled={focusLossDetectEnabled}
                 rightClickProtectEnabled={rightClickProtectEnabled}
                 keyboardProtectEnabled={keyboardProtectEnabled}
@@ -136,7 +102,7 @@ export default function PlayerPage() {
                   <span className="truncate max-w-[220px]" title={video.originalName}>{video.originalName}</span>
                   <span className="text-gray-700">|</span>
                   <span className="text-gray-500">Uploaded:</span>
-                  <span>{formatDate(video.uploadDate)}</span>
+                  <span>{formatDate(video.uploadDate, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
                   <span className="text-gray-700">|</span>
                   <span className="text-gray-500">Size:</span>
                   <span>{formatBytes(video.size)}</span>
@@ -144,11 +110,10 @@ export default function PlayerPage() {
               </div>
             </div>
 
-            {/* Security Demonstration Panel */}
             <div className="space-y-6">
               <div className="glass-panel border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden flex flex-col h-full justify-between">
                 <div className="absolute -top-16 -right-16 w-32 h-32 bg-violet-600/5 rounded-full blur-2xl pointer-events-none" />
-                
+
                 <div>
                   <div className="flex items-center gap-2 pb-4 mb-4 border-b border-white/5">
                     <ShieldAlert className="w-5 h-5 text-violet-400" />
@@ -161,9 +126,7 @@ export default function PlayerPage() {
                     This panel controls active client-side visual security features. Toggle specific items to demonstrate lockouts or adjust for DPI false positives.
                   </p>
 
-                  {/* Intercept Metrics & Toggles */}
                   <div className="space-y-3.5">
-                    {/* DevTools */}
                     <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
                       <div className="flex items-center gap-2">
                         <Cpu className="w-4 h-4 text-gray-500" />
@@ -189,7 +152,6 @@ export default function PlayerPage() {
                       </div>
                     </div>
 
-                    {/* Right Click */}
                     <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
                       <div className="flex items-center gap-2">
                         <Lock className="w-4 h-4 text-gray-500" />
@@ -203,7 +165,6 @@ export default function PlayerPage() {
                       </div>
                     </div>
 
-                    {/* Keyboard Shortcuts */}
                     <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
                       <div className="flex items-center gap-2">
                         <Lock className="w-4 h-4 text-gray-500" />
@@ -217,7 +178,6 @@ export default function PlayerPage() {
                       </div>
                     </div>
 
-                    {/* Focus Loss */}
                     <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
                       <div className="flex items-center gap-2">
                         <Eye className="w-4 h-4 text-gray-500" />
@@ -231,7 +191,6 @@ export default function PlayerPage() {
                       </div>
                     </div>
 
-                    {/* Watermark */}
                     <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-gray-500" />
@@ -245,7 +204,6 @@ export default function PlayerPage() {
                       </div>
                     </div>
 
-                    {/* Screen Record warnings */}
                     <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2.5">
                       <div className="flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 text-gray-500" />
@@ -259,7 +217,6 @@ export default function PlayerPage() {
                       </div>
                     </div>
 
-                    {/* Stream Hiding */}
                     <div className="flex items-center justify-between text-xs pb-1">
                       <div className="flex items-center gap-2">
                         <FileText className="w-4 h-4 text-gray-500" />
@@ -272,7 +229,6 @@ export default function PlayerPage() {
                   </div>
                 </div>
 
-                {/* Live Screen Size Diagnostics (Collapsible Drawer) */}
                 <div className="mt-6 border-t border-white/5 pt-4">
                   <button
                     onClick={() => setShowDiagnostics(!showDiagnostics)}
@@ -327,7 +283,7 @@ export default function PlayerPage() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
