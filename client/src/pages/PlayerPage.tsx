@@ -34,17 +34,17 @@ export default function PlayerPage() {
     const fetchVideoDetails = async () => {
       try {
         setLoading(true);
-        const response = await axios.get<Video[]>(`${API_BASE}/videos`);
-        const found = response.data.find((v) => v.filename === filename);
-        if (found) {
-          setVideo(found);
-          setError(null);
-        } else {
-          setError('The requested video metadata could not be found.');
-        }
+        const response = await axios.get<Video>(`${API_BASE}/videos/${filename}`);
+        setVideo(response.data);
+        setError(null);
       } catch (err) {
         console.error('Error fetching video details:', err);
-        setError('Connection error: Failed to fetch video details.');
+        const is404 = axios.isAxiosError(err) && err.response?.status === 404;
+        setError(
+          is404
+            ? 'The requested video metadata could not be found.'
+            : 'Connection error: Failed to fetch video details.',
+        );
       } finally {
         setLoading(false);
       }
@@ -84,6 +84,7 @@ export default function PlayerPage() {
             <VideoPlayer
               src={`${API_BASE}/video/${video.filename}`}
               title={video.title}
+              watermarkLabel={video.title}
               focusLossDetectEnabled={focusLossDetectEnabled}
               rightClickProtectEnabled={rightClickProtectEnabled}
               keyboardProtectEnabled={keyboardProtectEnabled}
@@ -230,7 +231,7 @@ export default function PlayerPage() {
                       highlight={devToolsStatus.cssDiffH > 200}
                     />
                     <div className="border-t border-white/5 pt-1 mt-1">
-                      <DiagRow label="Console Hook:" value={devToolsStatus.consoleHookTriggered ? 'YES' : 'NO'} highlight={devToolsStatus.consoleHookTriggered} />
+                      <DiagRow label="Debugger Trap:" value={devToolsStatus.consoleHookTriggered ? 'YES' : 'NO'} highlight={devToolsStatus.consoleHookTriggered} />
                       <DiagRow label="Size Locked:" value={devToolsStatus.dimensionsTriggered ? 'YES' : 'NO'} highlight={devToolsStatus.dimensionsTriggered} />
                     </div>
                   </div>

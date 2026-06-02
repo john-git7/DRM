@@ -41,6 +41,7 @@ export function useDevTools(): DevToolsStatus {
       const dimensionsTriggered = !isMobile && (cssDiffW > 100 || cssDiffH > 100);
 
       // Debugger timing trap: open DevTools pauses this statement, making elapsed > 100ms
+      // Timing trap: open DevTools pauses the debugger statement, making elapsed > 100ms
       let debuggerTriggered = false;
       const start = performance.now();
       // eslint-disable-next-line no-new-func
@@ -59,7 +60,7 @@ export function useDevTools(): DevToolsStatus {
         innerWidth: innerW,
         innerHeight: innerH,
         devicePixelRatio: dpr,
-        consoleHookTriggered: false,
+        consoleHookTriggered: debuggerTriggered,
       });
     };
 

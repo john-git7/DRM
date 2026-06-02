@@ -5,7 +5,7 @@ export interface Video {
   title: string;
   size: number;
   uploadDate: string;
-  mimetype?: string;
+  mimeType?: string;
 }
 
 export interface DevToolsStatus {
@@ -24,6 +24,7 @@ export interface DevToolsStatus {
 export interface VideoPlayerProps {
   src: string;
   title: string;
+  watermarkLabel?: string;
   focusLossDetectEnabled?: boolean;
   rightClickProtectEnabled?: boolean;
   keyboardProtectEnabled?: boolean;

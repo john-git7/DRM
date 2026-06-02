@@ -19,6 +19,7 @@ interface WatermarkPos {
 export default function VideoPlayer({
   src,
   title,
+  watermarkLabel = 'Demo User',
   focusLossDetectEnabled = true,
   rightClickProtectEnabled = true,
   keyboardProtectEnabled = true,
@@ -175,7 +176,7 @@ export default function VideoPlayer({
           style={{ top: watermarkPos.top, left: watermarkPos.left, transition: 'all 1s ease-in-out' }}
           className="absolute pointer-events-none text-white/25 text-xs font-bold select-none font-mono py-1 px-2 border border-white/20 bg-black/30 tracking-wider z-20 whitespace-nowrap animate-watermark uppercase"
         >
-          Demo User | {new Date().toLocaleDateString()} | {watermarkTime}
+          {watermarkLabel} | {new Date().toLocaleDateString()} | {watermarkTime}
         </div>
       )}
 
