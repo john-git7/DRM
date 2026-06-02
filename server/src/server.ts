@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import app from './app';
+import { syncUploadsToJson } from './services/videoService';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
 
@@ -34,6 +35,12 @@ function ensureDirectories(): void {
  */
 function start(): void {
   ensureDirectories();
+
+  // Sync any existing MP4 files in uploads/ into videos.json on startup
+  const syncResult = syncUploadsToJson();
+  if (syncResult.added > 0) {
+    console.log(`Synced ${syncResult.added} video(s) from uploads directory`);
+  }
 
   app.listen(PORT, () => {
     console.log(`Secure Video Player Backend running on port ${PORT}`);
