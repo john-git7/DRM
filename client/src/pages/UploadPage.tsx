@@ -1,77 +1,63 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import axios from 'axios';
+import type { AxiosProgressEvent } from 'axios';
 import { Upload, FileVideo, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { API_BASE } from '../config/api';
+import { formatBytes } from '../utils/format';
+import type { UploadResponse } from '../types';
 
 export default function UploadPage() {
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [progress, setProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<UploadResponse | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
-  
-  const fileInputRef = useRef(null);
 
-  // Constants
-  const API_BASE = 'http://localhost:5000/api';
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validateFile = (selectedFile) => {
-    if (!selectedFile) return false;
-    
-    const ext = selectedFile.name.split('.').pop().toLowerCase();
+  const validateFile = (selectedFile: File): boolean => {
+    const ext = selectedFile.name.split('.').pop()?.toLowerCase();
     const isMp4 = ext === 'mp4' && (selectedFile.type === 'video/mp4' || selectedFile.type === '');
-    
     if (!isMp4) {
       setError('Only MP4 video files (.mp4) are allowed.');
       setFile(null);
       return false;
     }
-    
     setError(null);
     return true;
   };
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
     if (validateFile(selectedFile)) {
       setFile(selectedFile);
-      // Pre-fill title if empty
-      if (!title) {
-        setTitle(selectedFile.name.replace(/\.[^/.]+$/, ""));
-      }
+      if (!title) setTitle(selectedFile.name.replace(/\.[^/.]+$/, ''));
     }
   };
 
-  // Drag and drop handlers
-  const handleDrag = (e) => {
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setIsDragActive(true);
-    } else if (e.type === "dragleave") {
-      setIsDragActive(false);
-    }
+    setIsDragActive(e.type === 'dragenter' || e.type === 'dragover');
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      if (validateFile(droppedFile)) {
-        setFile(droppedFile);
-        if (!title) {
-          setTitle(droppedFile.name.replace(/\.[^/.]+$/, ""));
-        }
-      }
+    const droppedFile = e.dataTransfer.files[0];
+    if (!droppedFile) return;
+    if (validateFile(droppedFile)) {
+      setFile(droppedFile);
+      if (!title) setTitle(droppedFile.name.replace(/\.[^/.]+$/, ''));
     }
   };
 
-  const handleUpload = async (e) => {
+  const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!file) {
       setError('Please select a video file first.');
@@ -88,53 +74,30 @@ export default function UploadPage() {
     formData.append('title', title.trim());
 
     try {
-      const response = await axios.post(`${API_BASE}/upload`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          setProgress(percentCompleted);
+      const response = await axios.post<UploadResponse>(`${API_BASE}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+          const total = progressEvent.total ?? progressEvent.loaded;
+          setProgress(Math.round((progressEvent.loaded * 100) / total));
         },
       });
-
-      setSuccess({
-        message: response.data.message || 'Video uploaded successfully!',
-        video: response.data.video,
-      });
+      setSuccess(response.data);
       setFile(null);
       setTitle('');
       setProgress(0);
     } catch (err) {
       console.error('Upload failed:', err);
-      setError(
-        err.response?.data?.error || 
-        'An error occurred during the upload. Please check connection and try again.'
-      );
+      const apiMessage = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error
+        : undefined;
+      setError(apiMessage ?? 'An error occurred during the upload. Please check connection and try again.');
     } finally {
       setUploading(false);
     }
   };
 
-  const triggerFileSelect = () => {
-    fileInputRef.current.click();
-  };
-
-  // Format bytes helper
-  const formatBytes = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const dm = 2;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-  };
-
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      {/* Page Header */}
       <div className="mb-8 text-center">
         <div className="inline-flex items-center justify-center p-2 bg-violet-600/10 rounded-full text-violet-400 mb-3 border border-violet-500/20">
           <Sparkles className="w-5 h-5 animate-pulse" />
@@ -148,11 +111,9 @@ export default function UploadPage() {
       </div>
 
       <div className="glass-panel rounded-2xl border border-white/10 p-6 md:p-8 shadow-2xl relative overflow-hidden">
-        {/* Decorative elements */}
         <div className="absolute -top-24 -left-24 w-48 h-48 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Feedback Notifications */}
         {error && (
           <div className="mb-6 flex items-center gap-3 bg-red-950/40 border border-red-500/30 text-red-300 p-4 rounded-xl text-sm animate-fadeIn">
             <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
@@ -182,7 +143,6 @@ export default function UploadPage() {
         )}
 
         <form onSubmit={handleUpload} className="space-y-6">
-          {/* Title Field */}
           <div>
             <label htmlFor="video-title" className="block text-sm font-semibold text-gray-300 mb-2">
               Video Title
@@ -198,13 +158,12 @@ export default function UploadPage() {
             />
           </div>
 
-          {/* Drag & Drop Upload Zone */}
           <div
             onDragEnter={handleDrag}
             onDragOver={handleDrag}
             onDragLeave={handleDrag}
             onDrop={handleDrop}
-            onClick={triggerFileSelect}
+            onClick={() => fileInputRef.current?.click()}
             className={`relative group cursor-pointer border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
               isDragActive
                 ? 'border-violet-500 bg-violet-600/10 shadow-lg shadow-violet-600/5'
@@ -251,15 +210,12 @@ export default function UploadPage() {
                     Drag and drop your MP4 file here, or{' '}
                     <span className="text-violet-400 group-hover:underline">browse</span>
                   </p>
-                  <p className="text-gray-500 text-xs mt-1.5">
-                    Supports MP4 videos up to 100MB
-                  </p>
+                  <p className="text-gray-500 text-xs mt-1.5">Supports MP4 videos up to 100MB</p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Progress bar */}
           {uploading && (
             <div className="space-y-2 animate-pulse">
               <div className="flex justify-between text-xs font-semibold text-gray-400">
@@ -275,7 +231,6 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* Action Button */}
           <button
             type="submit"
             disabled={uploading || !file}
