@@ -13,6 +13,7 @@ import {
   serveHlsKey,
   issueKeyGrant,
 } from '../controllers/hlsController';
+import { recordAudit } from '../controllers/auditController';
 import { requireAuth } from '../middleware/auth';
 import { tokenLimiter } from '../middleware/rateLimiter';
 
@@ -45,5 +46,8 @@ router.post('/hls/:videoId/key-grant', requireAuth, tokenLimiter, issueKeyGrant)
 router.get('/hls/:videoId/key', serveHlsKey);
 
 router.get('/hls/:videoId/:segment', serveHlsSegment);
+
+// POST /api/audit — record a session audit event (Phase 6)
+router.post('/audit', requireAuth, recordAudit);
 
 export default router;

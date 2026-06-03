@@ -6,6 +6,7 @@ import { getKey } from '../services/keyService';
 import { getVideoByFilename } from '../services/videoService';
 import { isEnrolled } from '../services/enrollmentService';
 import { issueGrant, verifyGrant, normalizeIp } from '../services/keyGrantService';
+import { appendAudit } from '../services/auditService';
 import type { AuthenticatedRequest } from '../types/auth';
 import { AppError } from '../middleware/errorHandler';
 
@@ -89,6 +90,18 @@ export function issueKeyGrant(req: AuthenticatedRequest, res: Response, next: Ne
 
   const ip = normalizeIp(req.ip);
   const { grant, ttl } = issueGrant({ videoId, ip, deviceId, username });
+
+  appendAudit({
+    timestamp: new Date().toISOString(),
+    username,
+    ip,
+    event: 'key-grant-issued',
+    videoId,
+    deviceId,
+    agentStatus: typeof req.body?.agentStatus === 'string' ? req.body.agentStatus : undefined,
+    userAgent: req.headers['user-agent']
+  });
+
   res.status(200).json({ grant, ttl });
 }
 
