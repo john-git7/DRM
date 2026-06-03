@@ -62,7 +62,7 @@ export default function VideoPlayer({
     const handleBlur = () => {
       if (!focusLossDetectEnabled) return;
       setWindowFocused(false);
-      navigator.clipboard?.writeText('PROTECTED SECURE CONTENT - SCREENSHOT INTERCEPTED').catch(() => {});
+      navigator.clipboard?.writeText('PROTECTED SECURE CONTENT - SCREENSHOT INTERCEPTED').catch(() => { });
       if (screenRecordWarningEnabled) {
         tabSwitchCount.current += 1;
         if (tabSwitchCount.current >= 3) setShowCaptureWarning(true);
@@ -99,6 +99,7 @@ export default function VideoPlayer({
   useEffect(() => {
     if (videoRef.current && src) {
       videoRef.current.src = src;
+      videoRef.current.load();
     }
   }, [src]);
 
@@ -234,9 +235,8 @@ export default function VideoPlayer({
 
       {/* Controls bar */}
       <div
-        className={`absolute inset-x-0 bottom-0 bg-[#111111] border-t-2 border-white/20 p-3 z-30 transition-all duration-200 flex flex-col gap-2 ${
-          showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
-        }`}
+        className={`absolute inset-x-0 bottom-0 bg-[#111111] border-t-2 border-white/20 p-3 z-30 transition-all duration-200 flex flex-col gap-2 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+          }`}
       >
         <input
           type="range"
