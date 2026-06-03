@@ -7,22 +7,24 @@ import {
   streamVideo,
   issueStreamToken,
 } from '../controllers/videoController';
+import { requireAuth } from '../middleware/auth';
+import { tokenLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
-// POST /api/upload — upload video file
-router.post('/upload', upload.single('video'), uploadVideo);
+// POST /api/upload — upload video file (auth required)
+router.post('/upload', requireAuth, upload.single('video'), uploadVideo);
 
-// GET /api/videos — list all videos (filename field stripped)
-router.get('/videos', listVideos);
+// GET /api/videos — list all videos (auth required, filename stripped)
+router.get('/videos', requireAuth, listVideos);
 
-// GET /api/videos/:filename — get video metadata by filename
-router.get('/videos/:filename', getVideoMeta);
+// GET /api/videos/:filename — video metadata (auth required)
+router.get('/videos/:filename', requireAuth, getVideoMeta);
 
-// POST /api/stream-token — issue short-lived HMAC stream token
-router.post('/stream-token', issueStreamToken);
+// POST /api/stream-token — issue HMAC stream token (auth required)
+router.post('/stream-token', requireAuth, tokenLimiter, issueStreamToken);
 
-// GET /api/video/:filename — stream video (requires valid ?token=)
+// GET /api/video/:filename — stream video (stream token only, no user auth — range requests must work)
 router.get('/video/:filename', streamVideo);
 
 export default router;

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { Play, FileVideo, Calendar, HardDrive, ShieldCheck, Film } from 'lucide-react';
-import { API_BASE } from '../config/api';
+import apiClient from '../utils/apiClient';
 import { formatBytes, formatDate } from '../utils/format';
 import type { Video } from '../types';
 
@@ -15,7 +14,7 @@ export default function LibraryPage() {
     const fetchVideos = async () => {
       try {
         setLoading(true);
-        const response = await axios.get<Video[]>(`${API_BASE}/videos`);
+        const response = await apiClient.get<Video[]>('/videos');
         setVideos(response.data);
         setError(null);
       } catch (err) {

@@ -2,6 +2,16 @@ import { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+
+const MP4_MAGIC = Buffer.from('ftyp');
+
+function isMp4(filePath: string): boolean {
+  const fd = fs.openSync(filePath, 'r');
+  const buf = Buffer.alloc(12);
+  fs.readSync(fd, buf, 0, 12, 0);
+  fs.closeSync(fd);
+  return buf.slice(4, 8).equals(MP4_MAGIC);
+}
 import { UploadBodySchema } from '../types/video';
 import { AppError } from '../middleware/errorHandler';
 import {
@@ -66,6 +76,13 @@ export function uploadVideo(
     ? bodyResult.data.title
     : req.file.originalname.replace(/\.[^/.]+$/, '');
 
+  const savedPath = getVideoFilePath(req.file.filename);
+  if (!isMp4(savedPath)) {
+    fs.unlinkSync(savedPath);
+    next(new AppError('Uploaded file is not a valid MP4 (magic bytes mismatch)', 415));
+    return;
+  }
+
   const newVideo = createVideo(req.file, title);
 
   res.status(201).json({
@@ -99,7 +116,8 @@ export function issueStreamToken(
   }
 
   const exp = Math.floor(Date.now() / 1000) + 3600;
-  const payload = Buffer.from(JSON.stringify({ filename: safeFilename, exp })).toString('base64url');
+  const ip = req.ip ?? '';
+  const payload = Buffer.from(JSON.stringify({ filename: safeFilename, exp, ip })).toString('base64url');
   const sig = crypto.createHmac('sha256', STREAM_SECRET).update(payload).digest('base64url');
 
   res.status(200).json({ token: `${payload}.${sig}` });
@@ -132,7 +150,7 @@ export function streamVideo(
     return;
   }
 
-  let parsed: { filename: string; exp: number };
+  let parsed: { filename: string; exp: number; ip?: string };
   try {
     parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   } catch {
@@ -149,6 +167,11 @@ export function streamVideo(
   const urlFilename = path.basename(req.params.filename);
   if (safeFilename !== urlFilename) {
     next(new AppError('Token filename mismatch', 401));
+    return;
+  }
+
+  if (parsed.ip && req.ip && parsed.ip !== req.ip) {
+    next(new AppError('Token IP mismatch', 401));
     return;
   }
 

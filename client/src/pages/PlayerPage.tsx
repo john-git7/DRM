@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../utils/apiClient';
 import {
   ArrowLeft, ShieldAlert, Sparkles, AlertCircle,
   Cpu, Eye, Lock, FileText, ChevronDown, ChevronUp,
@@ -9,6 +9,8 @@ import VideoPlayer from '../components/VideoPlayer';
 import ToggleSwitch from '../components/ToggleSwitch';
 import { useDevTools } from '../hooks/useDevTools';
 import { API_BASE } from '../config/api';
+import axios from 'axios';
+// axios kept for isAxiosError type guard; all requests go through apiClient
 import { formatBytes, formatDate } from '../utils/format';
 import type { Video } from '../types';
 
@@ -36,13 +38,13 @@ export default function PlayerPage() {
     const fetchVideoDetails = async () => {
       try {
         setLoading(true);
-        const response = await axios.get<Video>(`${API_BASE}/videos/${filename}`);
+        const response = await apiClient.get<Video>(`/videos/${filename}`);
         setVideo(response.data);
         setError(null);
 
         setTokenLoading(true);
-        const tokenResponse = await axios.post<{ token: string }>(
-          `${API_BASE}/stream-token`,
+        const tokenResponse = await apiClient.post<{ token: string }>(
+          '/stream-token',
           { videoId: response.data.filename },
         );
         setStreamToken(tokenResponse.data.token);
