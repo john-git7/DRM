@@ -1,0 +1,18 @@
+{
+  "signatures": [
+    { "name": "OBS Studio",        "match": ["obs", "obs64", "obs32", "obs-studio", "obs_studio"] },
+    { "name": "Bandicam",          "match": ["bandicam", "bdcam"] },
+    { "name": "Camtasia",          "match": ["camtasia", "camrec", "camtasiastudio"] },
+    { "name": "NVIDIA ShadowPlay", "match": ["nvidia share", "nvsphelper", "nvcontainer", "nvshare", "nvspcaps"] },
+    { "name": "Fraps",             "match": ["fraps"] },
+    { "name": "Dxtory",            "match": ["dxtory"] },
+    { "name": "QuickTime Player",  "match": ["quicktime", "quicktimeplayer"] },
+    { "name": "ScreenRec",         "match": ["screenrec"] },
+    { "name": "ShareX",            "match": ["sharex"] },
+    { "name": "Snagit",            "match": ["snagit", "snagiteditor", "snagitcapture"] },
+    { "name": "Action!",           "match": ["action", "mirillis", "mirillisaction"] },
+    { "name": "XSplit",            "match": ["xsplit", "xsplit.broadcaster", "xsplit.core"] },
+    { "name": "Movavi",            "match": ["movavi", "screenrecorder", "movaviscreenrecorder"] },
+    { "name": "Apowersoft",        "match": ["apowersoft", "apowerrec"] }
+  ]
+}
