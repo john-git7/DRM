@@ -136,3 +136,7 @@ uploads/                               # Raw MP4 files (auto-created, gitignored
 ## No Tests, No Docker
 
 No test suite configured. No containerization. Local dev only.
+
+## Documentation Style
+
+When writing any documentation file in this repository (README.md, CLAUDE.md, ARCHITECTURE_MVC.md, SECURITY_AUDIT.md, SECURITY_IMPROVEMENTS.md, or any other committed markdown), use full sentences and professional prose. Do not apply caveman-style shorthand, fragment sentences, or drop articles. Documentation is read by humans — write accordingly.
