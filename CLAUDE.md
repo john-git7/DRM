@@ -27,7 +27,7 @@ pnpm build      # tsc → dist/
 pnpm start      # node dist/server.js (production)
 ```
 
-Server requires a `.env` file — copy from `server/.env.example` and fill in secrets. Server exits at startup if `JWT_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, or `STREAM_SECRET` are missing. FFmpeg must be installed and on `PATH` (the upload pipeline shells out to `ffmpeg`).
+Server requires a `.env` file — copy from `server/.env.example` and fill in secrets. Server exits at startup if `JWT_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, or `STREAM_SECRET` are missing. Optional: `CLIENT_ORIGIN` sets the allowed CORS origin (default `http://localhost:5173`). FFmpeg must be installed and on `PATH` (the upload pipeline shells out to `ffmpeg`).
 
 **Localhost agent** (`agent/`):
 ```bash
@@ -112,9 +112,9 @@ streams/<videoId>/                     # Encrypted HLS: index.m3u8 + seg_NNN.ts 
 
 ## Key Behaviors
 
-- **Auth**: All `/api/*` routes except `/api/auth/login` and the public HLS playlist/segment/legacy-stream routes require `Authorization: Bearer <jwt>`. JWT issued on login, 24hr expiry.
+- **Auth**: All `/api/*` routes except `/api/auth/login`, the public HLS playlist/segment routes, and the grant-gated `/key` require `Authorization: Bearer <jwt>`. JWT issued on login, 24hr expiry. The server refuses to start if `JWT_SECRET`, `STREAM_SECRET`, `ADMIN_USERNAME`, or `ADMIN_PASSWORD` is missing (fail-closed).
 - **HLS encryption (Phase 1)**: On upload, FFmpeg transcodes the MP4 into 6-second AES-128 encrypted `.ts` segments + `index.m3u8` under `streams/<videoId>/`. Transcoding runs in the background; the video record carries `hlsStatus` (`processing`/`ready`/`failed`) and `hlsPlaylist`. One key per video (standard HLS AES-128); the key DB schema allows future per-segment rotation. Encrypted segments are public — useless without the key.
-- **Key server (Phase 2)**: `POST /api/hls/:videoId/key-grant` (JWT) checks the video is ready, the user is enrolled, and a device fingerprint is present, then mints a 30-second HMAC grant bound to video + IP + device. `GET /api/hls/:videoId/key` releases the AES-128 key only for a valid grant (via `?grant=` or `X-Key-Grant` header), with timing-safe signature and IP checks.
+- **Key server (Phase 2)**: `POST /api/hls/:videoId/key-grant` (JWT) checks the video is ready, the user is enrolled, and a device fingerprint is present, then mints a 30-second HMAC grant bound to video + IP + device. `GET /api/hls/:videoId/key` releases the AES-128 key only for a valid grant (via `?grant=` or `X-Key-Grant` header) **plus a matching `X-Device-Id` header**, with timing-safe signature, claim-shape, IP, and device checks. Rate-limited (`keyLimiter`).
 - **Recorder agent (Phase 3)**: The player polls `localhost:7891/status` before playback. A running recorder (threat) or unreachable agent (not-installed) blocks playback; the agent is re-checked mid-session. Detection uses word-boundary matching so unrelated apps don't false-positive.
 - **Player hardening (Phase 4)**: HLS.js player with `controlsList=nodownload`, `disablePictureInPicture`/`disableRemotePlayback`, no native controls. DevTools detection tears down the video source; playback pauses on `blur` and `visibilitychange`.
 - **DevTools detection**: dimension diff OR debugger timing trap. Disabled on mobile. The client ESLint config sets `'no-new-func': 'off'` intentionally — `useDevTools.ts` relies on the `Function`/`debugger` timing trap; do not "fix" this rule.
@@ -122,7 +122,6 @@ streams/<videoId>/                     # Encrypted HLS: index.m3u8 + seg_NNN.ts 
 - **Watermark + forensics (Phase 6)**: moving visible watermark shows the authenticated identity + date + live clock, repositioning every 5s; a faint per-user forensic overlay is tiled across the frame.
 - **Audit log (Phase 6)**: `POST /api/audit` (JWT) records session events (agent-check, playback-start/blocked, watch-time heartbeats, devtools-lockout); server stamps username, IP, timestamp.
 - **Focus loss**: pauses video + overwrites clipboard + shows resume overlay.
-- **Legacy raw stream**: `POST /api/stream-token` + `GET /api/video/:filename?token=` (HMAC-token, range requests) predate HLS and remain for compatibility; scheduled for removal now that the HLS path is the default.
 - **Security Monitor toggles** (PlayerPage): control VideoPlayer props — keyboard, right-click, focus loss, watermark, forensic watermark, capture warning. VideoPlayer is sole enforcer; AppShell does not duplicate these.
 
 ## API Endpoints
@@ -136,10 +135,8 @@ streams/<videoId>/                     # Encrypted HLS: index.m3u8 + seg_NNN.ts 
 | GET | `/api/hls/:videoId/index.m3u8` | None | Encrypted HLS playlist |
 | GET | `/api/hls/:videoId/:segment` | None | Encrypted `.ts` segment |
 | POST | `/api/hls/:videoId/key-grant` | JWT | Mint a 30s key grant (`{ deviceId }`) after enrollment/device checks |
-| GET | `/api/hls/:videoId/key` | Key grant | Release AES-128 key (`?grant=` or `X-Key-Grant`) |
+| GET | `/api/hls/:videoId/key` | Key grant + `X-Device-Id` | Release AES-128 key (`?grant=` or `X-Key-Grant`) |
 | POST | `/api/audit` | JWT | Record a session audit event (`{ event, ... }`) |
-| POST | `/api/stream-token` | JWT | Legacy: issue HMAC stream token (`{ videoId }`) |
-| GET | `/api/video/:filename` | Stream token | Legacy: raw MP4 stream with range support |
 | GET | `/health` | None | Server health check |
 
 The agent exposes a separate API on `:7891`: `GET /status` (recorder report) and `GET /health`.

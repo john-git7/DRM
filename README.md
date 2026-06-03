@@ -1,14 +1,14 @@
 # DRMShield
 
-> Browser-level DRM prototype with server-side JWT auth, HMAC stream tokens, and aggressive client-side content protection.
+> A browser-based DRM prototype: AES-128 encrypted HLS, a JWT key server with short-lived signed key grants, a localhost screen-recorder agent, a hardened HLS.js player, and forensic watermarking with session audit logging.
 
 ---
 
 ## What it does
 
-Upload an MP4. The server gates every byte behind authentication. The client wraps playback in multiple deterrence layers — DevTools lockout, keyboard blocking, focus detection, and a floating watermark that burns your identity into any screen recording.
+Upload an MP4. The server encrypts it into AES-128 HLS and stores the keys separately. The browser cannot get a decryption key until a JWT-authenticated, enrolled user passes a device and IP check and a localhost agent confirms no screen recorder is running — and even then the key grant expires in 30 seconds. The player adds DevTools lockout, focus pausing, a moving identity watermark, and a faint forensic overlay, while every session is written to an audit log.
 
-No Widevine. No FairPlay. Pure TypeScript, front to back.
+No Widevine. No FairPlay. Pure TypeScript front-to-back, plus a small standard-library Python agent.
 
 ---
 
@@ -16,133 +16,113 @@ No Widevine. No FairPlay. Pure TypeScript, front to back.
 
 | | |
 |--|--|
-| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4 |
+| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS v4, hls.js |
 | **Backend** | Node.js, Express, TypeScript |
-| **Auth** | JWT (jsonwebtoken) + bcryptjs |
+| **Encryption** | FFmpeg → AES-128 HLS (6s segments) |
+| **Auth** | JWT (jsonwebtoken) + bcryptjs; HMAC-SHA256 key grants |
+| **Agent** | Python 3 standard library (no dependencies) |
 | **Validation** | Zod |
 | **Upload** | Multer — MP4-only, 100 MB cap, magic-byte verified |
-| **Security** | Helmet, express-rate-limit, HMAC-SHA256 stream tokens |
+| **Security** | Helmet, express-rate-limit, fail-closed secret validation |
 | **Style** | Dark neobrutalism — hard borders, flat surfaces, violet offset shadows |
 
 ---
 
-## Security Model
+## The protection pipeline
 
-### Server (the real barrier)
+DRMShield is built in phases (see `assets/` for the diagram):
 
-```
-POST /api/auth/login          →  bcrypt verify → JWT (24hr)
-POST /api/stream-token        →  JWT required  → HMAC token (1hr, filename-locked)
-GET  /api/video/:f?token=     →  HMAC verify + expiry check → stream bytes
-GET  /api/videos              →  JWT required  → list (filename field stripped)
-POST /api/upload              →  JWT required  → magic-byte check → save
-```
+1. **Encryption** — FFmpeg transcodes each upload into AES-128 encrypted HLS segments; per-video keys go to a separate, gitignored key database.
+2. **Key server** — a JWT-gated endpoint issues a 30-second HMAC key grant bound to the video, the client IP, and a device fingerprint, after checking enrollment. The key is released only against a valid grant plus a matching device header.
+3. **Recorder agent** — a localhost service reports running screen recorders; the player blocks playback if one is found or the agent is absent.
+4. **Player hardening** — HLS.js with no native controls, no download, no Picture-in-Picture, DevTools source teardown, and pause-on-blur/visibility-change.
+5. *(Native mobile app — intentionally out of scope.)*
+6. **Watermark + audit** — a moving identity watermark, a faint per-user forensic overlay, and an append-only session audit log.
 
-Everything behind `/api/*` except login and the stream endpoint requires a Bearer token.
-The stream endpoint uses its own short-lived HMAC token so the browser can fetch video
-bytes without exposing a JWT in the URL.
-
-**Rate limits:** 100 req/15min (global) · 10 req/15min (login) · 30 req/min (stream token)
-
-### Client (deterrence layer)
-
-| Protection | Mechanism | Bypass resistance |
-|-----------|-----------|-----------------|
-| DevTools lockout | Dimension diff >200px OR debugger timing >200ms | Low (undockable) |
-| Keyboard blocking | Capture-phase listeners — F12, PrintScreen, Ctrl+Shift+I | Medium |
-| Right-click block | `contextmenu` preventDefault in VideoPlayer | Low |
-| Focus loss pause | `window.blur` → pause + blur + clipboard overwrite | Low (OBS, phone cam) |
-| Floating watermark | Repositions every 4s, title + date + clock | **Survives recording** |
-| Stream token | Server-issued, expires 1hr, locked to filename | High |
-
-> Client-side protections raise cost and leave forensic traces. They are not the security perimeter — the JWT + stream token layer is.
+The server is the real security perimeter; the client measures raise the cost of capture and leave forensic traces. See [`SECURITY.md`](./SECURITY.md) for the full model and the security-review findings.
 
 ---
 
 ## Quick Start
 
-### 1. Clone and install
+### 1. Prerequisites
+
+- Node.js 20+, pnpm
+- FFmpeg on `PATH` (`ffmpeg -version`)
+- Python 3 (for the agent)
+
+### 2. Install
 
 ```bash
-git clone https://github.com/john-git7/DRM.git
-cd DRM
-
-# Install both workspaces
+git clone <repo-url> && cd DRM
 cd server && pnpm install
 cd ../client && pnpm install
 ```
 
-### 2. Configure server secrets
+### 3. Configure server secrets
 
 ```bash
-cd server
-cp .env.example .env
+cd server && cp .env.example .env
 ```
 
-Edit `server/.env`:
+Edit `server/.env` (the server refuses to start if any of these are missing):
 
 ```env
-JWT_SECRET=        # openssl rand -hex 32
+JWT_SECRET=        # node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ADMIN_USERNAME=    # e.g. admin
 ADMIN_PASSWORD=    # plaintext — bcrypt-hashed at startup, never stored
-STREAM_SECRET=     # openssl rand -hex 32
+STREAM_SECRET=     # a second random 32-byte hex value
 ```
 
-Server exits at startup if any of these are missing.
-
-### 3. Run
+### 4. Run (three terminals)
 
 ```bash
-# Terminal 1 — server
-cd server && pnpm dev     # :5000
-
-# Terminal 2 — client
-cd client && pnpm dev     # :5173
+cd server && pnpm dev     # API on :5000
+cd client && pnpm dev     # web client on :5173
+cd agent  && python3 agent.py   # recorder agent on :7891
 ```
 
-Open `http://localhost:5173` → redirected to login.
+Open **http://localhost:5173**. New to the app? See the [User Guide](./USER_GUIDE.md).
 
 ---
 
 ## API Reference
 
-### Auth
-
-| Method | Path | Auth | Body |
-|--------|------|------|------|
-| `POST` | `/api/auth/login` | — | `{ username, password }` |
-| `GET` | `/health` | — | — |
-
-```json
-// POST /api/auth/login → 200
-{ "token": "<jwt>", "expiresAt": "2026-06-04T06:00:00.000Z" }
-```
-
-### Videos
-
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/api/videos` | JWT | List all videos |
-| `GET` | `/api/videos/:filename` | JWT | Single video metadata |
-| `POST` | `/api/upload` | JWT | Upload MP4 — field: `video`, optional: `title` |
-| `POST` | `/api/stream-token` | JWT | Issue stream token — body: `{ videoId }` |
-| `GET` | `/api/video/:filename?token=` | Stream token | Stream with HTTP range support |
+| `POST` | `/api/auth/login` | — | Issue JWT — `{ username, password }` |
+| `GET` | `/api/videos` | JWT | List videos (filename omitted) |
+| `GET` | `/api/videos/:filename` | JWT | Video metadata incl. `hlsStatus`, `hlsPlaylist` |
+| `POST` | `/api/upload` | JWT | Upload MP4 — field `video`; triggers AES-128 HLS transcode |
+| `GET` | `/api/hls/:videoId/index.m3u8` | — | Encrypted HLS playlist |
+| `GET` | `/api/hls/:videoId/:segment` | — | Encrypted `.ts` segment |
+| `POST` | `/api/hls/:videoId/key-grant` | JWT | Mint a 30s key grant — `{ deviceId }` |
+| `GET` | `/api/hls/:videoId/key` | Key grant + `X-Device-Id` | Release AES-128 key |
+| `POST` | `/api/audit` | JWT | Record a session audit event |
+| `GET` | `/health` | — | Health check |
 
-```json
-// POST /api/upload → 201
-{
-  "message": "Video uploaded successfully!",
-  "video": {
-    "id": "video-1717000000-001.mp4",
-    "title": "My Video",
-    "filename": "video-1717000000-001.mp4",
-    "size": 10485760,
-    "uploadDate": "2026-06-03T12:00:00.000Z"
-  }
-}
-```
+The agent exposes its own API on `:7891`: `GET /status` and `GET /health`.
 
 All errors return `{ "error": "message" }`.
+
+---
+
+## How a key reaches the player
+
+```
+POST /api/hls/:id/key-grant   (JWT)
+  └→ check video ready · check enrollment · require deviceId
+     grant = base64url({ videoId, ip, deviceId, username, exp: now+30 })
+             + "." + HMAC-SHA256("keygrant:v1:" + payload, STREAM_SECRET)
+     → { grant, ttl: 30 }
+
+GET /api/hls/:id/key   (X-Key-Grant: <grant>, X-Device-Id: <deviceId>)
+  └→ constant-time HMAC verify · validate claim shape
+     check exp · check videoId · check IP · check deviceId
+     → 16-byte AES-128 key   (hls.js decrypts the segments)
+```
+
+A leaked key URL is useless after 30 seconds, from another IP, or on another device.
 
 ---
 
@@ -150,95 +130,43 @@ All errors return `{ "error": "message" }`.
 
 ```
 DRM/
-├── client/src/
-│   ├── context/AuthContext.tsx       # token state, login(), logout()
-│   ├── utils/apiClient.ts            # axios + Bearer interceptor + 401→logout
-│   ├── components/
-│   │   ├── VideoPlayer.tsx           # player — all DRM protections live here
-│   │   └── ProtectedRoute.tsx        # redirects unauthenticated to /login
-│   ├── hooks/
-│   │   ├── useAuth.ts
-│   │   ├── useDevTools.ts            # dimension + debugger trap (500ms interval)
-│   │   └── useKeyboardProtection.ts
-│   └── pages/
-│       ├── LoginPage.tsx
-│       ├── LibraryPage.tsx
-│       ├── UploadPage.tsx
-│       └── PlayerPage.tsx            # player + Security Monitor toggle panel
-│
-└── server/src/
-    ├── config/
-    │   ├── users.ts                  # bcrypt hash at startup from env
-    │   └── multer.ts                 # MP4-only, 100MB
-    ├── services/
-    │   ├── authService.ts            # JWT issue/verify, bcrypt compare
-    │   └── videoService.ts           # CRUD, sync, file paths
-    ├── middleware/
-    │   ├── auth.ts                   # requireAuth — Bearer JWT guard
-    │   └── rateLimiter.ts            # global / login / token limiters
-    ├── controllers/
-    │   ├── authController.ts
-    │   └── videoController.ts        # stream token issuance + HMAC streaming
-    └── routes/
-        ├── authRoutes.ts
-        └── videoRoutes.ts
+├── client/src/          # React SPA — HLS.js player, agent gate, watermarks, audit
+├── server/src/          # Express API — HLS transcode, key server, enrollment, audit
+│   ├── services/        # hlsService, keyService, keyGrantService, enrollmentService, auditService
+│   ├── controllers/     # video, hls, audit, auth
+│   ├── config/          # secrets (fail-closed), paths, multer, users
+│   └── routes/
+├── agent/               # Python recorder-detection agent (:7891)
+├── uploads/             # raw MP4 sources (gitignored)
+└── streams/<id>/        # encrypted HLS output (gitignored)
 ```
 
----
-
-## How stream tokens work
-
-```
-POST /api/stream-token  (requires JWT)
-  └→ payload = base64url({ filename, exp: now + 3600 })
-     token   = payload + "." + HMAC-SHA256(payload, STREAM_SECRET)
-     → { token }
-
-GET /api/video/:filename?token=<token>  (no JWT)
-  └→ split token → recompute HMAC → compare
-     decode payload → check exp > now
-     check payload.filename === :filename param
-     → stream bytes (206 range or 200 full)
-```
-
-Token is embedded in the `<video>` src URL. It has no IP binding (removed — `req.ip`
-differs between proxy and direct requests in development). HMAC + filename lock is
-sufficient: a stolen token only streams that one file within its TTL.
+See [`CLAUDE.md`](./CLAUDE.md) for the full architecture map.
 
 ---
 
 ## Design System
 
-Dark neobrutalism. No gradients, no blur effects, no soft shadows.
+Dark neobrutalism. No gradients, no blur, no soft shadows.
 
 ```
-Background   #0a0a0a    Canvas
-Surface      #111111    Cards, panels
-Border       2px solid #ffffff
-Shadow       4px 4px 0px #7c3aed   (violet offset)
-Accent       #7c3aed    Actions, active states
-Warning      #f59e0b    Badges, overlays
-Danger       #ef4444    Errors, lockouts
-Success      #22c55e    Upload complete, pass states
+Background  #0a0a0a   Surface  #111111   Border  2px #ffffff
+Shadow  4px 4px 0px #7c3aed   Accent #7c3aed   Warning #f59e0b
+Danger  #ef4444   Success #22c55e
 ```
 
 ---
 
-## Known Limitations
+## Documentation
 
-| Attack | Status |
-|--------|--------|
-| Undocked DevTools | Defeats dimension detection — dimension diff stays 0 |
-| Debugger trap disabled | One checkbox in DevTools settings |
-| OBS / phone camera | Never triggers `window.blur` — watermark is the mitigation |
-| Browser extensions | Run above page JS — can override all client protections |
-| Plaintext HTTP | Wireshark on same LAN captures raw bytes — deploy with HTTPS |
-| localStorage JWT | XSS-readable — production should use `httpOnly` cookies |
+- [`USER_GUIDE.md`](./USER_GUIDE.md) — setup, usage, enrollment, audit, troubleshooting
+- [`SECURITY.md`](./SECURITY.md) — threat model, protection layers, security-review findings
+- [`CLAUDE.md`](./CLAUDE.md) — architecture map and key behaviors
+- [`agent/README.md`](./agent/README.md) — the localhost recorder-detection agent
+- [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) — earlier auth-layer vulnerability audit
 
 ---
 
-## Further Reading
+## Notes
 
-- [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) — full vulnerability list with severity and fix status
-- [`SECURITY_IMPROVEMENTS.md`](./SECURITY_IMPROVEMENTS.md) — changelog of every security fix
-- [`ARCHITECTURE_MVC.md`](./ARCHITECTURE_MVC.md) — request flow diagrams, layer responsibilities, token spec
+No test suite or containerization is configured; this is a local-development prototype. Deploy behind HTTPS and review [`SECURITY.md`](./SECURITY.md) before adapting it for any real use.
