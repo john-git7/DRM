@@ -1,0 +1,13 @@
+# Runtime content — never commit raw uploads, encrypted HLS output, or decryption keys
+uploads/
+streams/
+server/data/keys.json
+
+# Dependencies / build output
+node_modules/
+dist/
+# Project standardizes on pnpm; ignore npm lockfiles
+package-lock.json
+
+# Env
+.env

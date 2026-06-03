@@ -18,9 +18,11 @@ import {
   getVideos,
   getVideoByFilename,
   createVideo,
+  updateVideo,
   syncUploadsToJson,
   getVideoFilePath
 } from '../services/videoService';
+import { transcodeToHls } from '../services/hlsService';
 
 const STREAM_SECRET = process.env.STREAM_SECRET || 'dev-secret-change-in-prod';
 
@@ -84,10 +86,23 @@ export function uploadVideo(
   }
 
   const newVideo = createVideo(req.file, title);
+  updateVideo(newVideo.id, { hlsStatus: 'processing' });
+
+  // Kick off AES-128 HLS transcoding in the background and respond immediately.
+  // Status is tracked on the video record; clients poll GET /api/videos/:filename.
+  transcodeToHls(newVideo.id, savedPath)
+    .then(({ relativePlaylistUrl }) => {
+      updateVideo(newVideo.id, { hlsStatus: 'ready', hlsPlaylist: relativePlaylistUrl });
+      console.log(`HLS encryption ready for ${newVideo.id}`);
+    })
+    .catch((err: Error) => {
+      updateVideo(newVideo.id, { hlsStatus: 'failed' });
+      console.error(`HLS transcode failed for ${newVideo.id}: ${err.message}`);
+    });
 
   res.status(201).json({
-    message: 'Video uploaded successfully!',
-    video: newVideo
+    message: 'Video uploaded successfully! AES-128 HLS encryption in progress.',
+    video: { ...newVideo, hlsStatus: 'processing' as const }
   });
 }
 

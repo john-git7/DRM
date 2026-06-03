@@ -1,0 +1,104 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import crypto from 'crypto';
+import { spawn } from 'child_process';
+import { STREAMS_DIR } from '../config/paths';
+import { storeKey } from './keyService';
+
+/** Target segment length in seconds (roadmap Phase 1: 6-second .ts segments). */
+const SEGMENT_DURATION = 6;
+
+export interface HlsResult {
+  /** Absolute path of the generated playlist on disk. */
+  playlistPath: string;
+  /** Relative URL clients use to load the playlist. */
+  relativePlaylistUrl: string;
+}
+
+/**
+ * Transcode an uploaded MP4 into an AES-128 encrypted HLS stream (Phase 1).
+ *
+ * Produces 6-second .ts segments + an index.m3u8 under STREAMS_DIR/<videoId>/,
+ * each segment encrypted with a freshly generated AES-128 key. The encrypted
+ * output is safe to host on a CDN; the key itself is written to the separate
+ * key database (keyService) and the raw key material on disk is destroyed
+ * immediately after FFmpeg finishes.
+ *
+ * The playlist references the key via the relative URI "key", which resolves to
+ * GET /api/hls/<videoId>/key — a JWT-gated endpoint (hardened further in Phase 2).
+ *
+ * Note: this uses one key per video, the standard HLS AES-128 setup. Per-segment
+ * key rotation (FFmpeg periodic_rekey) is a future enhancement; keyService's schema
+ * already isolates keys per video id so it can be extended without a data migration.
+ */
+export async function transcodeToHls(videoId: string, inputPath: string): Promise<HlsResult> {
+  const safeId = path.basename(videoId);
+  const outDir = path.join(STREAMS_DIR, safeId);
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const key = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(16);
+  const keyHex = key.toString('hex');
+  const ivHex = iv.toString('hex');
+
+  // The raw key file and FFmpeg key_info file go to a private temp dir — NEVER into
+  // the public output dir. They are deleted as soon as FFmpeg exits.
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hls-key-'));
+  const keyFilePath = path.join(tmpDir, 'enc.key');
+  const keyInfoPath = path.join(tmpDir, 'enc.keyinfo');
+
+  try {
+    fs.writeFileSync(keyFilePath, key);
+
+    // key_info file format:
+    //   line 1 — key URI written verbatim into the playlist (where the player fetches the key)
+    //   line 2 — path to the key file FFmpeg reads to perform encryption
+    //   line 3 — IV (hex) baked into the EXT-X-KEY tag
+    fs.writeFileSync(keyInfoPath, `key\n${keyFilePath}\n${ivHex}\n`);
+
+    const playlistPath = path.join(outDir, 'index.m3u8');
+    const args = [
+      '-y',
+      '-i', inputPath,
+      '-c:v', 'libx264', '-profile:v', 'main', '-crf', '21', '-preset', 'veryfast',
+      '-c:a', 'aac', '-b:a', '128k',
+      // Align keyframes to segment boundaries so each 6s segment starts cleanly.
+      '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_DURATION})`,
+      '-hls_time', String(SEGMENT_DURATION),
+      '-hls_playlist_type', 'vod',
+      '-hls_key_info_file', keyInfoPath,
+      '-hls_segment_filename', path.join(outDir, 'seg_%03d.ts'),
+      playlistPath
+    ];
+
+    await runFfmpeg(args);
+
+    // Persist the key to the key DB only after a successful transcode.
+    storeKey(safeId, { method: 'AES-128', keyHex, ivHex, createdAt: new Date().toISOString() });
+
+    return { playlistPath, relativePlaylistUrl: `/api/hls/${safeId}/index.m3u8` };
+  } finally {
+    // Destroy raw key material regardless of success/failure.
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Run FFmpeg with the given args, resolving on exit code 0 and rejecting otherwise.
+ * Captures the tail of stderr to surface useful error context.
+ */
+function runFfmpeg(args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('ffmpeg', args);
+    let stderr = '';
+    proc.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+    proc.on('error', (err) => reject(err));
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-800)}`));
+    });
+  });
+}
