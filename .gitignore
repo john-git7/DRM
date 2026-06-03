@@ -12,5 +12,8 @@ dist/
 # Project standardizes on pnpm; ignore npm lockfiles
 package-lock.json
 
+# TypeScript incremental build info
+*.tsbuildinfo
+
 # Env
 .env

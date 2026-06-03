@@ -6,6 +6,8 @@ export interface Video {
   size: number;
   uploadDate: string;
   mimeType?: string;
+  hlsStatus?: 'processing' | 'ready' | 'failed';
+  hlsPlaylist?: string;
 }
 
 export interface DevToolsStatus {
@@ -22,14 +24,31 @@ export interface DevToolsStatus {
 }
 
 export interface VideoPlayerProps {
-  src: string;
+  /** Absolute URL of the encrypted HLS playlist (.m3u8). */
+  hlsUrl: string;
+  /** 30-second signed key grant attached to the HLS key request. */
+  keyGrant: string;
   title: string;
+  /** Identity shown in the moving watermark (user email/username). */
   watermarkLabel?: string;
+  /** When true, the player tears down the video source (DevTools open). */
+  devToolsOpen?: boolean;
+  /** Called with elapsed watch-time seconds for audit heartbeats. */
+  onWatchTimeTick?: (seconds: number) => void;
   focusLossDetectEnabled?: boolean;
   rightClickProtectEnabled?: boolean;
   keyboardProtectEnabled?: boolean;
   watermarkEnabled?: boolean;
   screenRecordWarningEnabled?: boolean;
+  /** Faint per-user forensic overlay encoding identity across the frame. */
+  forensicWatermarkEnabled?: boolean;
+}
+
+export type AgentState = 'clean' | 'threat' | 'not-installed' | 'error' | 'checking';
+
+export interface AgentStatus {
+  state: AgentState;
+  recorders: string[];
 }
 
 export interface UploadResponse {
