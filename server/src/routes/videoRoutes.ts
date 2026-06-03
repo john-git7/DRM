@@ -5,29 +5,24 @@ import {
   getVideoMeta,
   uploadVideo,
   streamVideo,
-  syncVideos
+  issueStreamToken,
 } from '../controllers/videoController';
 
 const router = Router();
 
-/**
- * Video API routes
- * Thin routing layer delegating to controllers
- */
-
 // POST /api/upload — upload video file
 router.post('/upload', upload.single('video'), uploadVideo);
 
-// GET /api/videos — list all videos
+// GET /api/videos — list all videos (filename field stripped)
 router.get('/videos', listVideos);
 
 // GET /api/videos/:filename — get video metadata by filename
 router.get('/videos/:filename', getVideoMeta);
 
-// GET /api/video/:filename — stream video file with range support
-router.get('/video/:filename', streamVideo);
+// POST /api/stream-token — issue short-lived HMAC stream token
+router.post('/stream-token', issueStreamToken);
 
-// POST /api/sync — sync uploads directory with database
-router.post('/sync', syncVideos);
+// GET /api/video/:filename — stream video (requires valid ?token=)
+router.get('/video/:filename', streamVideo);
 
 export default router;

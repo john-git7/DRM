@@ -96,6 +96,12 @@ export default function VideoPlayer({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  useEffect(() => {
+    if (videoRef.current && src) {
+      videoRef.current.src = src;
+    }
+  }, [src]);
+
   const togglePlay = () => {
     if (!windowFocused && focusLossDetectEnabled) return;
     if (!videoRef.current) return;
@@ -155,7 +161,6 @@ export default function VideoPlayer({
     >
       <video
         ref={videoRef}
-        src={src}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         className={`w-full h-full object-contain transition-all duration-300 ${isFocusLost ? 'blur-xl select-none pointer-events-none' : ''}`}

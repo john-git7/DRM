@@ -91,7 +91,7 @@ export default function LibraryPage() {
           {videos.map((video) => (
             <Link
               key={video.id}
-              to={`/player/${video.filename}`}
+              to={`/player/${video.id}`}
               className="brutal-card flex flex-col justify-between group transition-all duration-75 hover:-translate-y-0.5 hover:-translate-x-0.5"
               style={{ '--hover-shadow': '6px 6px 0px #7c3aed' } as React.CSSProperties}
               onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '6px 6px 0px #7c3aed')}

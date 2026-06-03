@@ -16,6 +16,8 @@ export default function PlayerPage() {
   const { filename = '' } = useParams<{ filename: string }>();
 
   const [video, setVideo] = useState<Video | null>(null);
+  const [streamToken, setStreamToken] = useState<string | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +39,14 @@ export default function PlayerPage() {
         const response = await axios.get<Video>(`${API_BASE}/videos/${filename}`);
         setVideo(response.data);
         setError(null);
+
+        setTokenLoading(true);
+        const tokenResponse = await axios.post<{ token: string }>(
+          `${API_BASE}/stream-token`,
+          { videoId: response.data.filename },
+        );
+        setStreamToken(tokenResponse.data.token);
+        setTokenLoading(false);
       } catch (err) {
         console.error('Error fetching video details:', err);
         const is404 = axios.isAxiosError(err) && err.response?.status === 404;
@@ -45,6 +55,7 @@ export default function PlayerPage() {
             ? 'The requested video metadata could not be found.'
             : 'Connection error: Failed to fetch video details.',
         );
+        setTokenLoading(false);
       } finally {
         setLoading(false);
       }
@@ -65,7 +76,7 @@ export default function PlayerPage() {
         </Link>
       </div>
 
-      {loading ? (
+      {loading || tokenLoading ? (
         <div className="space-y-4">
           <div className="aspect-video w-full bg-[#111] border-2 border-white/10 animate-pulse" />
           <div className="h-6 bg-white/10 w-1/3 animate-pulse" />
@@ -77,12 +88,12 @@ export default function PlayerPage() {
           <p className="text-gray-400 text-sm font-mono mb-6">{error}</p>
           <Link to="/" className="brutal-btn">Return to Library</Link>
         </div>
-      ) : video ? (
+      ) : video && streamToken ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Player column */}
           <div className="lg:col-span-2 space-y-4">
             <VideoPlayer
-              src={`${API_BASE}/video/${video.filename}`}
+              src={`${API_BASE}/video/${video.filename}?token=${streamToken}`}
               title={video.title}
               watermarkLabel={video.title}
               focusLossDetectEnabled={focusLossDetectEnabled}
