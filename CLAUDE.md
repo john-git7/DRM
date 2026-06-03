@@ -8,7 +8,7 @@ DRMShield — Secure Video Player prototype. Client-side content protection for 
 
 ## Dev Commands
 
-Two separate pnpm workspaces. Run each in separate terminals.
+The client and server are two independent pnpm projects (no root `package.json` or `pnpm-workspace.yaml` — each has its own `package.json` and `pnpm-lock.yaml`). Run `pnpm install` in each, and run their dev servers in separate terminals. Developed on Node 24 with pnpm; no Node version is pinned via `engines`/`.nvmrc`. A stray `client/package-lock.json` exists — prefer pnpm to keep lockfiles consistent.
 
 **Client** (`client/`):
 ```bash
@@ -87,7 +87,7 @@ uploads/                               # Raw MP4 files (auto-created, gitignored
 
 - **Auth**: All `/api/*` routes except `/api/auth/login` and `/api/video/:filename` require `Authorization: Bearer <jwt>`. JWT issued on login, 24hr expiry.
 - **Stream tokens**: `POST /api/stream-token` (requires JWT) issues a short-lived HMAC-SHA256 token. `GET /api/video/:filename?token=` validates it on every request including range requests. TTL: 1hr.
-- **DevTools detection**: triggers full app unmount (black screen). Dimension diff > 200px OR debugger timing > 200ms. Disabled on mobile.
+- **DevTools detection**: triggers full app unmount (black screen). Dimension diff > 200px OR debugger timing > 200ms. Disabled on mobile. The client ESLint config sets `'no-new-func': 'off'` intentionally — `useDevTools.ts` relies on the `Function`/`debugger` timing trap; do not "fix" this rule.
 - **Upload**: MP4 only (extension + magic-byte check), 100MB limit. Non-MP4 files deleted + 415 returned.
 - **Streaming**: chunked HTTP range requests (`Accept-Ranges`). Video served only through `/api/video/:filename?token=`.
 - **Watermark**: title + date + live clock overlay, repositions every 4s.
@@ -139,4 +139,4 @@ No test suite configured. No containerization. Local dev only.
 
 ## Documentation Style
 
-When writing any documentation file in this repository (README.md, CLAUDE.md, ARCHITECTURE_MVC.md, SECURITY_AUDIT.md, SECURITY_IMPROVEMENTS.md, or any other committed markdown), use full sentences and professional prose. Do not apply caveman-style shorthand, fragment sentences, or drop articles. Documentation is read by humans — write accordingly.
+When writing any documentation file in this repository (README.md, CLAUDE.md, SECURITY_AUDIT.md, or any other committed markdown), use full sentences and professional prose. Do not apply caveman-style shorthand, fragment sentences, or drop articles. Documentation is read by humans — write accordingly.
