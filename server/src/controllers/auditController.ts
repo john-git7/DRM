@@ -25,17 +25,20 @@ export function recordAudit(req: AuthenticatedRequest, res: Response, next: Next
     return;
   }
 
+  // Length-cap free-text fields so the flat-file log cannot be inflated per write.
+  const cap = (s: string, n: number): string => s.slice(0, n);
+
   appendAudit({
     timestamp: new Date().toISOString(),
     username,
     ip: normalizeIp(req.ip),
-    event: body.event,
-    videoId: typeof body.videoId === 'string' ? path.basename(body.videoId) : undefined,
-    deviceId: typeof body.deviceId === 'string' ? body.deviceId : undefined,
-    agentStatus: typeof body.agentStatus === 'string' ? body.agentStatus : undefined,
-    recorders: Array.isArray(body.recorders) ? body.recorders.map(String).slice(0, 50) : undefined,
+    event: cap(body.event, 64),
+    videoId: typeof body.videoId === 'string' ? path.basename(body.videoId).slice(0, 128) : undefined,
+    deviceId: typeof body.deviceId === 'string' ? cap(body.deviceId, 64) : undefined,
+    agentStatus: typeof body.agentStatus === 'string' ? cap(body.agentStatus, 32) : undefined,
+    recorders: Array.isArray(body.recorders) ? body.recorders.map((r) => cap(String(r), 64)).slice(0, 50) : undefined,
     watchTimeSec: typeof body.watchTimeSec === 'number' ? Math.max(0, Math.floor(body.watchTimeSec)) : undefined,
-    userAgent: req.headers['user-agent']
+    userAgent: typeof req.headers['user-agent'] === 'string' ? cap(req.headers['user-agent'], 256) : undefined
   });
 
   res.status(202).json({ recorded: true });

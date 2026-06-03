@@ -108,7 +108,8 @@ export function issueKeyGrant(req: AuthenticatedRequest, res: Response, next: Ne
 /**
  * GET /api/hls/:videoId/key?grant=<token>   (or X-Key-Grant header)
  * Release the 16-byte AES-128 key only on presentation of a valid, unexpired grant
- * bound to this video and the caller's IP (Phase 2). No grant, no key.
+ * bound to this video, the caller's IP, and the device fingerprint sent via the
+ * X-Device-Id header (Phase 2). No grant, no key.
  */
 export function serveHlsKey(req: Request, res: Response, next: NextFunction): void {
   const videoId = path.basename(req.params.videoId);
@@ -116,15 +117,18 @@ export function serveHlsKey(req: Request, res: Response, next: NextFunction): vo
     (typeof req.query.grant === 'string' && req.query.grant) ||
     (typeof req.headers['x-key-grant'] === 'string' && (req.headers['x-key-grant'] as string)) ||
     '';
+  const deviceId = typeof req.headers['x-device-id'] === 'string' ? (req.headers['x-device-id'] as string) : '';
 
   if (!grant) {
     next(new AppError('Key grant required', 401));
     return;
   }
 
-  const result = verifyGrant(grant, { videoId, ip: normalizeIp(req.ip) });
+  const result = verifyGrant(grant, { videoId, ip: normalizeIp(req.ip), deviceId });
   if (!result.valid) {
-    next(new AppError(`Invalid key grant: ${result.reason}`, 403));
+    // Generic client-facing message; log the specific reason server-side only.
+    console.warn(`[hls] key grant rejected for ${videoId}: ${result.reason}`);
+    next(new AppError('Invalid key grant', 403));
     return;
   }
 

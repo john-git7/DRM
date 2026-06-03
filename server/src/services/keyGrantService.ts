@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { STREAM_SECRET } from '../config/secrets';
 
 /**
  * Phase 2 — short-lived signed key grants.
@@ -6,14 +7,16 @@ import crypto from 'crypto';
  * Before the AES-128 key is ever released, the client must obtain a grant from a
  * JWT-protected endpoint. The grant is an HMAC-signed token binding the request to
  * a specific video, client IP, and device fingerprint, and it expires in 30 seconds.
- * The key endpoint then releases the key only on presentation of a valid grant —
- * so a stolen key URL is useless after 30s, from another IP, or another device.
+ * The key endpoint then releases the key only on presentation of a valid grant AND
+ * a matching device fingerprint — so a stolen key URL is useless after 30s, from
+ * another IP, or another device.
  */
 
 const GRANT_TTL_SECONDS = 30;
 
-// Domain-separated from the stream-token HMAC so the two token types are not interchangeable.
-const GRANT_SECRET = process.env.STREAM_SECRET || 'dev-secret-change-in-prod';
+// Validated, fail-closed secret. Domain-separated from the stream-token HMAC so the
+// two token types are not interchangeable.
+const GRANT_SECRET = STREAM_SECRET;
 const DOMAIN = 'keygrant:v1:';
 
 export interface GrantClaims {
@@ -50,10 +53,14 @@ export type GrantVerifyResult =
   | { valid: false; reason: string };
 
 /**
- * Verify a grant against the live request context (expected video + caller IP).
- * Uses a timing-safe signature comparison and checks expiry, video, and IP binding.
+ * Verify a grant against the live request context (expected video, caller IP, and
+ * presented device fingerprint). Uses a timing-safe signature comparison and checks
+ * claim shape, expiry, video, IP, and device binding.
  */
-export function verifyGrant(token: string, expected: { videoId: string; ip: string }): GrantVerifyResult {
+export function verifyGrant(
+  token: string,
+  expected: { videoId: string; ip: string; deviceId: string }
+): GrantVerifyResult {
   const dot = token.lastIndexOf('.');
   if (dot === -1) return { valid: false, reason: 'malformed grant' };
 
@@ -74,9 +81,20 @@ export function verifyGrant(token: string, expected: { videoId: string; ip: stri
     return { valid: false, reason: 'undecodable grant' };
   }
 
+  // Validate claim shape before trusting any field.
+  if (
+    typeof claims.exp !== 'number' ||
+    typeof claims.videoId !== 'string' ||
+    typeof claims.ip !== 'string' ||
+    typeof claims.deviceId !== 'string'
+  ) {
+    return { valid: false, reason: 'malformed claims' };
+  }
+
   if (Math.floor(Date.now() / 1000) > claims.exp) return { valid: false, reason: 'grant expired' };
   if (claims.videoId !== expected.videoId) return { valid: false, reason: 'video mismatch' };
   if (normalizeIp(claims.ip) !== normalizeIp(expected.ip)) return { valid: false, reason: 'ip mismatch' };
+  if (!expected.deviceId || claims.deviceId !== expected.deviceId) return { valid: false, reason: 'device mismatch' };
 
   return { valid: true, claims };
 }

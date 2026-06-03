@@ -15,5 +15,9 @@ package-lock.json
 # TypeScript incremental build info
 *.tsbuildinfo
 
+# Python bytecode (agent)
+__pycache__/
+*.pyc
+
 # Env
 .env

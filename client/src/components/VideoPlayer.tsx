@@ -20,6 +20,7 @@ interface WatermarkPos {
 export default function VideoPlayer({
   hlsUrl,
   keyGrant,
+  deviceId,
   title,
   watermarkLabel = 'Demo User',
   devToolsOpen = false,
@@ -61,10 +62,11 @@ export default function VideoPlayer({
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        // Attach the 30-second signed grant to the AES-128 key request only.
+        // Attach the 30-second signed grant + device fingerprint to the key request only.
         xhrSetup: (xhr, url) => {
           if (/\/key(\?|$)/.test(url)) {
             xhr.setRequestHeader('X-Key-Grant', keyGrant);
+            xhr.setRequestHeader('X-Device-Id', deviceId);
           }
         },
       });
@@ -87,7 +89,7 @@ export default function VideoPlayer({
     }
 
     setLoadError('HLS playback is not supported in this browser.');
-  }, [hlsUrl, keyGrant, devToolsOpen]);
+  }, [hlsUrl, keyGrant, deviceId, devToolsOpen]);
 
   // DevTools open → tear down the loaded source so frames cannot be inspected.
   useEffect(() => {

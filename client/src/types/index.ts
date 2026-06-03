@@ -28,6 +28,8 @@ export interface VideoPlayerProps {
   hlsUrl: string;
   /** 30-second signed key grant attached to the HLS key request. */
   keyGrant: string;
+  /** Device fingerprint sent with the key request; must match the grant. */
+  deviceId: string;
   title: string;
   /** Identity shown in the moving watermark (user email/username). */
   watermarkLabel?: string;

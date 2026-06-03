@@ -41,6 +41,7 @@ export default function PlayerPage() {
   const devToolsStatus = useDevTools();
   const devToolsOpen = devToolsDetectEnabled && devToolsStatus.isOpen;
   const deviceIdRef = useRef<string | null>(null);
+  const [deviceId, setDeviceId] = useState('');
   const auditedDevTools = useRef(false);
 
   /** Run the agent pre-check, then (if clean) acquire a 30s key grant. */
@@ -48,7 +49,9 @@ export default function PlayerPage() {
     setPreparing(true);
     setKeyGrant(null);
     try {
-      const deviceId = deviceIdRef.current ?? (deviceIdRef.current = await getDeviceFingerprint());
+      const fingerprint = deviceIdRef.current ?? (deviceIdRef.current = await getDeviceFingerprint());
+      setDeviceId(fingerprint);
+      const deviceId = fingerprint;
 
       const agentStatus = await checkAgent();
       setAgent(agentStatus);
@@ -190,6 +193,7 @@ export default function PlayerPage() {
                 key={keyGrant}
                 hlsUrl={`${API_BASE}${video.hlsPlaylist}`}
                 keyGrant={keyGrant!}
+                deviceId={deviceId}
                 title={video.title}
                 watermarkLabel={username ?? 'Authenticated User'}
                 devToolsOpen={devToolsOpen}
