@@ -1,6 +1,9 @@
 # DRMShield — Secure Video Player Prototype
 
-A production-quality prototype demonstrating aggressive client-side digital rights protection for video streaming. Built with **React + TypeScript** on the frontend and **Node.js + TypeScript (Express)** on the backend. No Widevine or FairPlay required — pure browser-level lockdown.
+A production-quality prototype demonstrating aggressive client-side digital rights
+protection for video streaming, backed by a server-side JWT authentication layer and
+HMAC-signed stream tokens. Built with **React + TypeScript** on the frontend and
+**Node.js + TypeScript (Express)** on the backend.
 
 ---
 
@@ -10,75 +13,104 @@ A production-quality prototype demonstrating aggressive client-side digital righ
 |-------|-----------|
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS v4 |
 | Backend | Node.js, Express, TypeScript |
+| Auth | JWT (jsonwebtoken), bcryptjs |
 | Validation | Zod |
 | Upload | Multer (disk storage, MP4-only, 100 MB cap) |
+| Security | Helmet, express-rate-limit, HMAC-SHA256 stream tokens |
 | Styling | Dark neobrutalism — hard borders, offset shadows, flat surfaces |
 | Package manager | pnpm (workspaces) |
 
 ---
 
-## Security Features
+## Security Architecture
 
-### 1. DevTools Lockout (DOM Eradication)
+### Server-Side (primary protection layer)
 
-Two parallel detection methods run every 500 ms:
+**Authentication:** All sensitive API endpoints require a JWT Bearer token. Tokens are
+issued at `POST /api/auth/login` after bcrypt credential validation. Admin credentials
+are loaded from environment variables at startup — plaintext is never stored.
 
-- **Dimension trap** — measures `outerWidth/outerHeight` vs `innerWidth/innerHeight`. A difference > 100 CSS px (corrected for Windows DPI scaling) indicates a docked DevTools panel.
-- **Debugger timing trap** — executes `new Function('debugger')()` and measures elapsed time. If DevTools is open, the debugger statement pauses execution; elapsed > 100 ms = detected.
+**Stream tokens:** Video streaming uses short-lived HMAC-SHA256 tokens issued by
+`POST /api/stream-token`. Each token encodes `{ filename, exp }` signed with
+`STREAM_SECRET`. The stream endpoint validates signature, expiry, and filename match
+on every request — including HTTP range requests.
 
-On detection the entire React app is **instantly unmounted** and replaced with a black `<div>`. The video URL, source code, and DOM tree vanish from the Elements inspector. Mobile devices are excluded (virtual keyboard shrinks `innerHeight`, triggering false positives).
+**Rate limiting:** Three tiers — 100 req/15min (global), 10 req/15min (login endpoint),
+30 req/min (stream token endpoint) — all per IP.
 
-### 2. Right-Click Shield
+**Security headers:** Helmet sets `X-Frame-Options`, `X-Content-Type-Options`,
+`Strict-Transport-Security`, `Cross-Origin-Embedder-Policy`, and `Content-Security-Policy`.
 
-- A transparent `z-0` overlay covers the video element, intercepting all pointer events before the native context menu fires.
-- `oncontextmenu="return false;"` on `<body>` blocks global right-clicks.
-- Any right-click anywhere on the page permanently blurs the entire application until hard refresh.
+**Upload validation:** After Multer saves a file, the first 12 bytes are read to verify
+the MP4 `ftyp` magic box at offset 4. Extension and MIME type spoofing are rejected with
+`415 Unsupported Media Type` and the file is deleted.
 
-### 3. Keyboard & Screenshot Blocking
+**Filename protection:** `GET /api/videos` omits the `filename` field — clients receive
+an opaque `id`. The internal disk path is never exposed to unauthenticated callers.
 
-Event listeners attached in the **capture phase** (cannot be bypassed by `stopPropagation`) intercept:
+---
 
-| Shortcut | Platform | Action |
-|----------|----------|--------|
-| `F12` | All | Blocked |
-| `Ctrl+Shift+I/J/C` | Windows/Linux | Blocked |
-| `Ctrl+U`, `Ctrl+S` | All | Blocked |
-| `PrintScreen` | Windows | Blocked + clipboard poisoned |
-| `Win+Shift+S`, `Win+Alt+R` | Windows | Blocked + clipboard poisoned |
-| `Cmd+Shift+3/4/5` | macOS | Blocked + clipboard poisoned |
-| `Ctrl+Shift+F5` | ChromeOS | Blocked + clipboard poisoned |
+### Client-Side (deterrence layer)
 
-Screenshot shortcuts overwrite the clipboard with `"PROTECTED SECURE CONTENT — SCREENSHOT INTERCEPTED"` before the OS can write the image.
+#### 1. DevTools Lockout
 
-### 4. Focus Loss & Screen Record Deterrence
+Two parallel detection methods run every 500ms:
 
-When the window loses focus (tab switch, minimize, screen-capture tool stealing focus):
-- Video playback pauses immediately.
-- Clipboard is overwritten.
-- The player blurs (`blur-xl`).
-- A "Playback Paused" overlay appears.
-- After 3+ focus losses, a "Capture Detected" stamp is shown.
+- **Dimension trap** — `outerWidth/outerHeight` vs `innerWidth/innerHeight`. Difference
+  > 200 CSS px (corrected for Windows DPI scaling) indicates a docked DevTools panel.
+- **Debugger timing trap** — `new Function('debugger')()` measured with `performance.now()`.
+  Elapsed > 200ms = DevTools paused execution.
 
-### 5. Dynamic Floating Watermark
+On detection the entire React app is unmounted and replaced with a black `<div>`. Mobile
+devices excluded (virtual keyboard causes false positives).
 
-- Renders the video title + date + live clock over the player.
-- Repositioned to a random coordinate (within 10–75% of player bounds) every **4 seconds**.
-- CSS animation adds subtle drift between repositions (`watermarkFloat` keyframes).
-- Defeats static crop-based screen recording.
+#### 2. Right-Click Shield
 
-### 6. Proxied Video Streaming
+A transparent `z-0` overlay intercepts all pointer events on the video. `contextmenu`
+handler blocks right-click globally within the player.
 
-The frontend never accesses `uploads/` directly. All video bytes flow through:
+#### 3. Keyboard & Screenshot Blocking
+
+Capture-phase event listeners (cannot be bypassed by `stopPropagation`) intercept:
+
+| Shortcut | Action |
+|----------|--------|
+| `F12`, `Ctrl+Shift+I/J/C` | Blocked |
+| `Ctrl+U`, `Ctrl+S` | Blocked |
+| `PrintScreen` | Blocked + clipboard poisoned |
+| `Win+Shift+S`, `Win+Alt+R` | Blocked + clipboard poisoned |
+| `Cmd+Shift+3/4/5` | Blocked + clipboard poisoned |
+
+Screenshot shortcuts overwrite the clipboard with `"PROTECTED SECURE CONTENT — SCREENSHOT
+INTERCEPTED"` before the OS writes the image.
+
+#### 4. Focus Loss & Screen Record Deterrence
+
+On `window.blur`:
+- Video pauses immediately
+- Clipboard overwritten
+- Player blurs (`blur-xl`)
+- "Playback Paused" overlay shown
+- After 3+ focus losses: "Capture Detected" stamp
+
+#### 5. Dynamic Floating Watermark
+
+- Renders video title + date + live clock over the player
+- Repositioned to a random coordinate every **4 seconds**
+- CSS animation adds subtle drift between repositions
+- Survives into any screen recording and identifies the leaking user
+
+#### 6. Proxied Video Streaming
+
+The frontend never references `uploads/` directly. All bytes flow through:
 
 ```
-GET /api/video/:filename  →  HTTP range streaming  →  browser <video>
+POST /api/stream-token  →  token valid 1 hour
+GET  /api/video/:filename?token=  →  HTTP range streaming  →  browser <video>
 ```
 
-The actual file path is never exposed to the client. Range requests (`206 Partial Content`, `Accept-Ranges: bytes`) enable seeking without full download.
-
-### 7. Mobile Compatibility
-
-All dimension-based DevTools checks are disabled on touch devices (detected via `navigator.userAgent` + `pointer: coarse` media query). The debugger timing trap remains active to catch USB remote-debugging on Android.
+Stream URL includes an expiring token. URLs copied from the Network tab become invalid
+after 1 hour. `src` attribute is absent from the `<video>` DOM element — set imperatively.
 
 ---
 
@@ -88,168 +120,131 @@ All dimension-based DevTools checks are disabled on touch devices (detected via 
 |-------|-------|-------|
 | Canvas | `#0a0a0a` | Page background |
 | Surface | `#111111` | Cards, panels |
-| Surface-2 | `#1a1a1a` | Inset / nested panels |
 | Border | `2px solid #ffffff` | All structural borders |
 | Shadow | `4px 4px 0px #7c3aed` | Hard offset (violet) |
 | Accent | `#7c3aed` | Primary actions, active nav |
 | Amber | `#f59e0b` | Warnings, hazard badges |
-| Green | `#22c55e` | Pass / success states |
+| Green | `#22c55e` | Success states |
 | Red | `#ef4444` | Lockout / danger states |
 
-**Rules:** No `backdrop-filter`. No gradient backgrounds. No soft `box-shadow`. Flat surfaces + thick borders + hard offset shadows only. Status badges are styled as physical rubber stamps (uppercase monospace, square corners, offset shadow matching badge color).
+Rules: No `backdrop-filter`. No gradient backgrounds. No soft `box-shadow`. Flat surfaces
++ thick borders + hard offset shadows only.
 
 ---
 
-## Architecture
-
-### Directory Structure
+## Directory Structure
 
 ```
 d:/DRM/
-├── client/                             # React + TypeScript frontend
-│   ├── src/
-│   │   ├── config/api.ts               # API_BASE (env-configurable via VITE_API_BASE)
-│   │   ├── types/index.ts              # Video, DevToolsStatus, VideoPlayerProps, UploadResponse
-│   │   ├── utils/format.ts             # formatBytes, formatDate
-│   │   ├── components/
-│   │   │   ├── VideoPlayer.tsx         # DRM player — watermark, overlays, controls
-│   │   │   └── ToggleSwitch.tsx        # Reusable neobrutalism toggle
-│   │   ├── hooks/
-│   │   │   ├── useDevTools.ts          # Dimension + debugger trap detection
-│   │   │   └── useKeyboardProtection.ts  # Capture-phase keyboard blocker
-│   │   ├── pages/
-│   │   │   ├── LibraryPage.tsx         # Video grid
-│   │   │   ├── UploadPage.tsx          # Drag-drop upload with progress bar
-│   │   │   └── PlayerPage.tsx          # Player + Security Monitor panel
-│   │   ├── App.tsx                     # Router + global focus/right-click/devtools guards
-│   │   ├── main.tsx                    # React entry point
-│   │   └── index.css                   # Tailwind v4 + neobrutalism utility classes
-│   ├── .env.example                    # VITE_API_BASE template
-│   ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
-│   └── package.json
+├── client/
+│   └── src/
+│       ├── config/api.ts               # API_BASE (env-configurable)
+│       ├── types/index.ts              # Shared TypeScript interfaces
+│       ├── utils/
+│       │   ├── format.ts               # formatBytes, formatDate
+│       │   └── apiClient.ts            # Axios + Bearer interceptor + 401 redirect
+│       ├── context/AuthContext.tsx     # AuthProvider — token, login(), logout()
+│       ├── hooks/
+│       │   ├── useAuth.ts              # Thin hook wrapper
+│       │   ├── useDevTools.ts          # Dimension + debugger trap detection
+│       │   └── useKeyboardProtection.ts
+│       ├── components/
+│       │   ├── VideoPlayer.tsx         # DRM player
+│       │   ├── ToggleSwitch.tsx        # Reusable toggle
+│       │   └── ProtectedRoute.tsx      # Auth guard component
+│       ├── pages/
+│       │   ├── LoginPage.tsx
+│       │   ├── LibraryPage.tsx
+│       │   ├── UploadPage.tsx
+│       │   └── PlayerPage.tsx
+│       └── App.tsx                     # Router + AuthProvider + AppShell
 │
-├── server/                             # Express + TypeScript backend
-│   ├── src/
-│   │   ├── config/
-│   │   │   ├── paths.ts                # UPLOADS_DIR, DB_PATH constants
-│   │   │   └── multer.ts               # Multer instance (MP4-only, 100 MB, disk storage)
-│   │   ├── services/
-│   │   │   └── videoService.ts         # Business logic — CRUD, sync, streaming paths
-│   │   ├── controllers/
-│   │   │   └── videoController.ts      # HTTP handlers — calls service, sends response
-│   │   ├── routes/
-│   │   │   └── videoRoutes.ts          # Thin router — middleware + controller binding
-│   │   ├── middleware/
-│   │   │   └── errorHandler.ts         # AppError class + global error handler
-│   │   ├── types/
-│   │   │   └── video.ts                # Video Zod schema + inferred types
-│   │   ├── app.ts                      # Express setup (CORS, parsers, routes, error handler)
-│   │   └── server.ts                   # Entry — ensureDirectories → syncUploads → listen
-│   ├── data/videos.json                # Flat-file metadata store (auto-created)
-│   └── package.json
+├── server/
+│   └── src/
+│       ├── config/
+│       │   ├── paths.ts                # UPLOADS_DIR, DB_PATH
+│       │   ├── multer.ts               # Upload config
+│       │   └── users.ts                # Admin credentials + bcrypt hash
+│       ├── types/
+│       │   ├── video.ts                # Zod schema + Video type
+│       │   └── auth.ts                 # JwtPayload, AuthenticatedRequest
+│       ├── services/
+│       │   ├── videoService.ts         # Video CRUD, sync, paths
+│       │   └── authService.ts          # JWT issue/verify, bcrypt compare
+│       ├── middleware/
+│       │   ├── errorHandler.ts         # AppError + global handler
+│       │   ├── auth.ts                 # requireAuth middleware
+│       │   └── rateLimiter.ts          # globalLimiter, loginLimiter, tokenLimiter
+│       ├── controllers/
+│       │   ├── videoController.ts      # Video HTTP handlers
+│       │   └── authController.ts       # Login handler
+│       ├── routes/
+│       │   ├── videoRoutes.ts          # Video routes with auth guards
+│       │   └── authRoutes.ts           # POST /api/auth/login
+│       ├── app.ts                      # Express setup
+│       └── server.ts                   # Entry point
 │
-├── uploads/                            # Raw MP4 files (auto-created, gitignored)
-└── README.md
+├── uploads/                            # MP4 files (auto-created, gitignored)
+├── ARCHITECTURE_MVC.md
+├── SECURITY_AUDIT.md
+└── SECURITY_IMPROVEMENTS.md
 ```
-
-### Request Flow
-
-```
-Browser
-  │
-  ├─ GET /api/videos          → listVideos controller → videoService.getVideos()
-  ├─ GET /api/videos/:f       → getVideoMeta controller → videoService.getVideoByFilename()
-  ├─ POST /api/upload         → multer middleware → uploadVideo controller → videoService.createVideo()
-  ├─ GET /api/video/:f        → streamVideo controller → fs.createReadStream (range-aware)
-  └─ POST /api/sync           → syncVideos controller → videoService.syncUploadsToJson()
-```
-
-### Server Layer Responsibilities
-
-| Layer | File | Responsibility |
-|-------|------|---------------|
-| Config | `config/paths.ts` | Centralized absolute paths |
-| Config | `config/multer.ts` | File storage + validation config |
-| Service | `services/videoService.ts` | All business logic, no HTTP |
-| Controller | `controllers/videoController.ts` | req/res handling, calls service |
-| Router | `routes/videoRoutes.ts` | Route bindings only |
-| Middleware | `middleware/errorHandler.ts` | `AppError` class + global handler |
 
 ---
 
 ## API Reference
 
-### Videos
+### Auth
+
+| Method | Path | Auth | Body |
+|--------|------|------|------|
+| `POST` | `/api/auth/login` | None | `{ username, password }` |
+| `GET` | `/health` | None | — |
+
+**Login response:**
+```json
+{ "token": "<jwt>", "expiresAt": "<iso-date>" }
+```
+
+### Videos (all require `Authorization: Bearer <token>`)
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/videos` | List all videos |
-| `GET` | `/api/videos/:filename` | Get single video metadata |
-| `POST` | `/api/upload` | Upload MP4 (multipart/form-data) |
-| `GET` | `/api/video/:filename` | Stream video (range-aware) |
-| `POST` | `/api/sync` | Sync `uploads/` directory to `videos.json` |
-| `GET` | `/health` | Server health check |
+| `GET` | `/api/videos/:filename` | Single video metadata |
+| `POST` | `/api/upload` | Upload MP4 (`multipart/form-data`, field: `video`) |
+| `POST` | `/api/stream-token` | Issue stream token — body: `{ videoId }` |
+| `GET` | `/api/video/:filename?token=` | Stream video (no JWT — stream token only) |
 
-### `POST /api/upload`
-
-**Request:** `multipart/form-data`
-
-| Field | Type | Required | Notes |
-|-------|------|----------|-------|
-| `video` | File | Yes | `.mp4` only, max 100 MB |
-| `title` | string | No | Defaults to filename without extension |
-
-**Response `201`:**
-```json
-{
-  "message": "Video uploaded successfully!",
-  "video": {
-    "id": "video-1234567890-000.mp4",
-    "title": "My Video",
-    "originalName": "my-video.mp4",
-    "filename": "video-1234567890-000.mp4",
-    "size": 10485760,
-    "uploadDate": "2026-06-01T17:45:02.768Z",
-    "mimeType": "video/mp4"
-  }
-}
-```
-
-### `POST /api/sync`
-
-Scans `uploads/` for `.mp4` files not present in `videos.json` and adds them. Also runs automatically on server startup.
-
-**Response `200`:**
-```json
-{ "message": "Sync complete", "added": 2, "videos": [...] }
-```
-
-### `GET /api/video/:filename`
-
-Streams the video file. Supports `Range` header for seeking (`206 Partial Content`).
-
-### Error shape
-
-All errors return:
-```json
-{ "error": "Human-readable message" }
-```
+All errors: `{ "error": "message" }`
 
 ---
 
 ## Local Setup
 
-Requires [Node.js](https://nodejs.org) v18+ and [pnpm](https://pnpm.io).
+Requires Node.js v18+ and pnpm.
 
-### Backend
+### 1. Server
 
 ```bash
 cd server
 pnpm install
+cp .env.example .env
+```
+
+Edit `.env`:
+```env
+JWT_SECRET=<generate: openssl rand -hex 32>
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=<your password>
+STREAM_SECRET=<generate: openssl rand -hex 32>
+```
+
+```bash
 pnpm dev          # ts-node-dev hot reload on :5000
 ```
 
-### Frontend
+### 2. Client
 
 ```bash
 cd client
@@ -257,22 +252,13 @@ pnpm install
 pnpm dev          # Vite dev server on :5173
 ```
 
-### Environment (optional)
+Open `http://localhost:5173` — you will be redirected to the login page.
+
+### Environment (client — optional)
 
 ```bash
-# client/.env  (copy from .env.example)
-VITE_API_BASE=http://localhost:5000/api
-```
-
-Without this file, the client defaults to `http://localhost:5000/api`.
-
-### Client scripts
-
-```bash
-pnpm build        # tsc + Vite production build
-pnpm type-check   # TypeScript check only (no emit)
-pnpm lint         # ESLint
-pnpm preview      # Preview production build
+# client/.env
+VITE_API_BASE=http://localhost:5000/api   # defaults to this if absent
 ```
 
 ---
@@ -280,15 +266,34 @@ pnpm preview      # Preview production build
 ## Manual Testing
 
 1. Start both servers (`pnpm dev` in `server/` and `client/`).
-2. Open `http://localhost:5173`.
-3. **Upload** — go to Upload page, drag an `.mp4`, set a title, click "Start Secure Upload". Progress bar advances; on success a "Play Now" link appears.
-4. **Library** — video card appears. Click to open the player.
-5. **Security hooks:**
-   - Right-click anywhere → permanent app blur.
-   - `F12` or browser DevTools menu → instant black screen.
-   - `PrintScreen` → paste in Paint → clipboard shows warning text, not a screenshot.
-   - Alt-Tab away → playback pauses, player blurs, overlay appears.
-6. **Security Monitor panel** (right column on player page):
-   - Toggle individual protections on/off to demonstrate each mechanism.
-   - Expand "DPI & Dimension Diagnostics" to see live window measurements and whether the debugger trap fired.
-7. **Manual sync** — drop an `.mp4` file directly into `uploads/`, then call `POST http://localhost:5000/api/sync` (or restart server) → video appears in library without going through the upload UI.
+2. Open `http://localhost:5173` → redirected to `/login`.
+3. **Login** — enter credentials from `server/.env`. JWT stored in localStorage.
+4. **Upload** — go to Upload page, drag an `.mp4`, set a title, click "Start Secure Upload".
+5. **Library** — video card appears. Click to open the player.
+6. **Player** — video loads via HMAC stream token. Controls, watermark, and Security Monitor panel visible.
+7. **Security hooks** (togglable from Security Monitor panel):
+   - Right-click on video → blocked
+   - `F12` → instant black screen (DevTools lockout)
+   - `PrintScreen` → paste → clipboard warning text, not screenshot
+   - Alt-Tab away → playback pauses, overlay appears
+   - Toggle individual protections on/off to demonstrate each mechanism
+8. **Sign out** → token cleared, redirected to `/login`, all routes blocked.
+
+---
+
+## Inherent Limitations
+
+Browser-level DRM cannot match Widevine/FairPlay/PlayReady because:
+
+1. JavaScript runs in a sandbox the user controls
+2. The browser is user software — its behavior can be modified
+3. Rendered pixels are always accessible to OS-level tools
+4. HTTP without TLS is plaintext on the wire
+
+This prototype's client-side protections are a **deterrence layer** — they raise cost and
+leave forensic traces (watermark). They are not the security perimeter. The server-side
+JWT + stream token system is the real access control.
+
+**Production recommendation:** Use a CDN with token-authenticated HLS/DASH (Cloudflare
+Stream, Mux, AWS MediaPackage) + Widevine/FairPlay, with this app's client-side
+protections on top.
