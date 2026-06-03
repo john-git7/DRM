@@ -9,7 +9,6 @@ import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './hooks/useAuth';
 import { useDevTools } from './hooks/useDevTools';
-import { useKeyboardProtection } from './hooks/useKeyboardProtection';
 
 function Header() {
   const location = useLocation();
@@ -78,9 +77,7 @@ function Footer() {
 
 function AppShell() {
   const [windowFocused, setWindowFocused] = useState(true);
-  const [rightClickBlur, setRightClickBlur] = useState(false);
 
-  useKeyboardProtection();
   const devToolsStatus = useDevTools();
 
   useEffect(() => {
@@ -99,20 +96,11 @@ function AppShell() {
     };
   }, []);
 
-  useEffect(() => {
-    const handleRightClick = (e: MouseEvent) => {
-      e.preventDefault();
-      setRightClickBlur(true);
-    };
-    document.addEventListener('contextmenu', handleRightClick, true);
-    return () => document.removeEventListener('contextmenu', handleRightClick, true);
-  }, []);
-
   if (devToolsStatus.isOpen) {
     return <div className="w-screen h-screen bg-black" />;
   }
 
-  const isBlurred = !windowFocused || rightClickBlur;
+  const isBlurred = !windowFocused;
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-gray-100 relative">
