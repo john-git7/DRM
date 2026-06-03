@@ -5,29 +5,26 @@ import {
   getVideoMeta,
   uploadVideo,
   streamVideo,
-  syncVideos
+  issueStreamToken,
 } from '../controllers/videoController';
+import { requireAuth } from '../middleware/auth';
+import { tokenLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
-/**
- * Video API routes
- * Thin routing layer delegating to controllers
- */
+// POST /api/upload — upload video file (auth required)
+router.post('/upload', requireAuth, upload.single('video'), uploadVideo);
 
-// POST /api/upload — upload video file
-router.post('/upload', upload.single('video'), uploadVideo);
+// GET /api/videos — list all videos (auth required, filename stripped)
+router.get('/videos', requireAuth, listVideos);
 
-// GET /api/videos — list all videos
-router.get('/videos', listVideos);
+// GET /api/videos/:filename — video metadata (auth required)
+router.get('/videos/:filename', requireAuth, getVideoMeta);
 
-// GET /api/videos/:filename — get video metadata by filename
-router.get('/videos/:filename', getVideoMeta);
+// POST /api/stream-token — issue HMAC stream token (auth required)
+router.post('/stream-token', requireAuth, tokenLimiter, issueStreamToken);
 
-// GET /api/video/:filename — stream video file with range support
+// GET /api/video/:filename — stream video (stream token only, no user auth — range requests must work)
 router.get('/video/:filename', streamVideo);
-
-// POST /api/sync — sync uploads directory with database
-router.post('/sync', syncVideos);
 
 export default router;

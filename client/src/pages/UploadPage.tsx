@@ -3,7 +3,7 @@ import axios from 'axios';
 import type { AxiosProgressEvent } from 'axios';
 import { Upload, FileVideo, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { API_BASE } from '../config/api';
+import apiClient from '../utils/apiClient';
 import { formatBytes } from '../utils/format';
 import type { UploadResponse } from '../types';
 
@@ -71,7 +71,7 @@ export default function UploadPage() {
     formData.append('title', title.trim());
 
     try {
-      const response = await axios.post<UploadResponse>(`${API_BASE}/upload`, formData, {
+      const response = await apiClient.post<UploadResponse>('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent: AxiosProgressEvent) => {
           const total = progressEvent.total ?? progressEvent.loaded;
