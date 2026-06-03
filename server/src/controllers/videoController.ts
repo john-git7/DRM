@@ -195,14 +195,16 @@ export function streamVideo(
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
       'Accept-Ranges': 'bytes',
       'Content-Length': chunkSize,
-      'Content-Type': 'video/mp4'
+      'Content-Type': 'video/mp4',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     });
     fs.createReadStream(videoPath, { start, end }).pipe(res);
   } else {
     res.writeHead(200, {
       'Content-Length': fileSize,
       'Content-Type': 'video/mp4',
-      'Accept-Ranges': 'bytes'
+      'Accept-Ranges': 'bytes',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     });
     fs.createReadStream(videoPath).pipe(res);
   }
