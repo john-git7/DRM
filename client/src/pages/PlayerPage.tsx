@@ -165,7 +165,7 @@ export default function PlayerPage() {
                   label="Shortcuts (F12, Inspect)"
                   badge={
                     <span className={`brutal-badge ${keyboardProtectEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>
-                      {keyboardProtectEnabled ? 'BLOCKED' : 'ALLOW'}
+                    {keyboardProtectEnabled ? 'BLOCKED' : 'ALLOW'}
                     </span>
                   }
                   checked={keyboardProtectEnabled}
@@ -253,7 +253,14 @@ export default function PlayerPage() {
             </div>
           </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="brutal-card-danger p-10 max-w-xl mx-auto text-center">
+          <AlertCircle className="w-12 h-12 text-[#ef4444] mx-auto mb-4" />
+          <p className="text-[#ef4444] font-black text-lg uppercase tracking-wide mb-2">Stream Unavailable</p>
+          <p className="text-gray-400 text-sm font-mono mb-6">Could not obtain a stream token. Please try again.</p>
+          <Link to="/" className="brutal-btn">Return to Library</Link>
+        </div>
+      )}
     </div>
   );
 }
