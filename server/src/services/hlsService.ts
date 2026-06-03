@@ -77,7 +77,8 @@ export async function transcodeToHls(videoId: string, inputPath: string): Promis
     // Persist the key to the key DB only after a successful transcode.
     storeKey(safeId, { method: 'AES-128', keyHex, ivHex, createdAt: new Date().toISOString() });
 
-    return { playlistPath, relativePlaylistUrl: `/api/hls/${safeId}/index.m3u8` };
+    // Path is relative to the client's API_BASE (which already includes "/api").
+    return { playlistPath, relativePlaylistUrl: `/hls/${safeId}/index.m3u8` };
   } finally {
     // Destroy raw key material regardless of success/failure.
     fs.rmSync(tmpDir, { recursive: true, force: true });
