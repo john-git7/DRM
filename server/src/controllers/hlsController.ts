@@ -3,6 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import { STREAMS_DIR } from '../config/paths';
 import { getKey } from '../services/keyService';
+import { getVideoByFilename } from '../services/videoService';
+import { isEnrolled } from '../services/enrollmentService';
+import { issueGrant, verifyGrant, normalizeIp } from '../services/keyGrantService';
+import type { AuthenticatedRequest } from '../types/auth';
 import { AppError } from '../middleware/errorHandler';
 
 /** Resolve the on-disk directory for a video's HLS output, guarding against traversal. */
@@ -47,14 +51,71 @@ export function serveHlsSegment(req: Request, res: Response, next: NextFunction)
 }
 
 /**
- * GET /api/hls/:videoId/key
- * Return the 16-byte AES-128 key for a stream.
+ * POST /api/hls/:videoId/key-grant   (requireAuth)
+ * Phase 2 — validate the request and issue a 30-second signed key grant.
  *
- * Phase 1 baseline: gated by requireAuth (valid JWT) at the route layer. Phase 2
- * replaces this with enrollment + IP/device checks and a 30-second signed key URL.
+ * Checks: video exists and is HLS-ready, the JWT user is enrolled, and a device
+ * fingerprint is supplied. The grant is bound to the video, the caller's IP, and
+ * the device, and is required by GET /key below.
+ */
+export function issueKeyGrant(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  const videoId = path.basename(req.params.videoId);
+  const username = req.user?.username;
+  if (!username) {
+    next(new AppError('Unauthorized', 401));
+    return;
+  }
+
+  const { deviceId } = req.body as { deviceId?: string };
+  if (!deviceId || typeof deviceId !== 'string' || deviceId.length < 8) {
+    next(new AppError('A device fingerprint is required', 400));
+    return;
+  }
+
+  const video = getVideoByFilename(videoId);
+  if (!video) {
+    next(new AppError('Video not found', 404));
+    return;
+  }
+  if (video.hlsStatus !== 'ready') {
+    next(new AppError('Video is not ready for secure playback', 409));
+    return;
+  }
+
+  if (!isEnrolled(username, videoId)) {
+    next(new AppError('Not enrolled in this content', 403));
+    return;
+  }
+
+  const ip = normalizeIp(req.ip);
+  const { grant, ttl } = issueGrant({ videoId, ip, deviceId, username });
+  res.status(200).json({ grant, ttl });
+}
+
+/**
+ * GET /api/hls/:videoId/key?grant=<token>   (or X-Key-Grant header)
+ * Release the 16-byte AES-128 key only on presentation of a valid, unexpired grant
+ * bound to this video and the caller's IP (Phase 2). No grant, no key.
  */
 export function serveHlsKey(req: Request, res: Response, next: NextFunction): void {
-  const record = getKey(path.basename(req.params.videoId));
+  const videoId = path.basename(req.params.videoId);
+  const grant =
+    (typeof req.query.grant === 'string' && req.query.grant) ||
+    (typeof req.headers['x-key-grant'] === 'string' && (req.headers['x-key-grant'] as string)) ||
+    '';
+
+  if (!grant) {
+    next(new AppError('Key grant required', 401));
+    return;
+  }
+
+  const result = verifyGrant(grant, { videoId, ip: normalizeIp(req.ip) });
+  if (!result.valid) {
+    next(new AppError(`Invalid key grant: ${result.reason}`, 403));
+    return;
+  }
+
+  const record = getKey(videoId);
   if (!record) {
     next(new AppError('Decryption key not found', 404));
     return;
@@ -63,5 +124,6 @@ export function serveHlsKey(req: Request, res: Response, next: NextFunction): vo
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader('Content-Length', String(keyBytes.length));
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.status(200).end(keyBytes);
 }

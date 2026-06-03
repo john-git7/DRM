@@ -43,6 +43,21 @@ function ensureDirectories(): void {
     fs.writeFileSync(keysPath, JSON.stringify({}, null, 2), 'utf-8');
     console.log(`Created key database at: ${keysPath}`);
   }
+
+  // Seed the enrollment map (Phase 2). The admin user is enrolled in everything ("*").
+  const enrollmentsPath = path.join(dataDir, 'enrollments.json');
+  if (!fs.existsSync(enrollmentsPath)) {
+    const admin = process.env.ADMIN_USERNAME || 'admin';
+    fs.writeFileSync(enrollmentsPath, JSON.stringify({ [admin]: '*' }, null, 2), 'utf-8');
+    console.log(`Created enrollment map at: ${enrollmentsPath}`);
+  }
+
+  // Ensure the audit log exists (Phase 6).
+  const auditPath = path.join(dataDir, 'audit-log.json');
+  if (!fs.existsSync(auditPath)) {
+    fs.writeFileSync(auditPath, JSON.stringify([], null, 2), 'utf-8');
+    console.log(`Created audit log at: ${auditPath}`);
+  }
 }
 
 /**

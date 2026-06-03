@@ -1,7 +1,10 @@
-# Runtime content — never commit raw uploads, encrypted HLS output, or decryption keys
+# Runtime content — never commit raw uploads, encrypted HLS output, decryption keys,
+# local enrollment data, or audit logs
 uploads/
 streams/
 server/data/keys.json
+server/data/enrollments.json
+server/data/audit-log.json
 
 # Dependencies / build output
 node_modules/
