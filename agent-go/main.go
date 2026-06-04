@@ -595,9 +595,20 @@ func buildStatus() status {
 
 var allowedOrigin = envOr("AGENT_ALLOWED_ORIGIN", "http://localhost:5173")
 
+func isLocalhostOrigin(o string) bool {
+	for _, p := range []string{"http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1"} {
+		if o == p || strings.HasPrefix(o, p+":") {
+			return true
+		}
+	}
+	return false
+}
+
 func cors(w http.ResponseWriter, r *http.Request) {
+	// Echo the configured origin, or ANY localhost origin (any port) — the player's
+	// dev port varies; this localhost-only agent serves only status, so it's safe.
 	origin := allowedOrigin
-	if o := r.Header.Get("Origin"); o == allowedOrigin {
+	if o := r.Header.Get("Origin"); o == allowedOrigin || isLocalhostOrigin(o) {
 		origin = o
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)

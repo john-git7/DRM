@@ -64,6 +64,12 @@ AGENT_HOST = os.environ.get("AGENT_HOST", "127.0.0.1")
 AGENT_PORT = int(os.environ.get("AGENT_PORT", "7891"))
 AGENT_ALLOWED_ORIGIN = os.environ.get("AGENT_ALLOWED_ORIGIN", "http://localhost:5173")
 
+_LOCALHOST_ORIGIN = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
+
+
+def _is_localhost_origin(origin):
+    return bool(_LOCALHOST_ORIGIN.match(origin))
+
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 SIGNATURES_PATH = os.path.join(AGENT_DIR, "signatures.json")
 
@@ -451,8 +457,11 @@ class AgentHandler(BaseHTTPRequestHandler):
     server_version = "ArqxAtlasAgent/" + VERSION
 
     def _resolved_origin(self):
+        # Echo the configured origin, or ANY localhost/127.0.0.1 origin (any port) —
+        # the player's dev port varies (5173/5174/5180…), and this agent is
+        # localhost-only and serves only status, so reflecting localhost is safe.
         request_origin = self.headers.get("Origin")
-        if request_origin and request_origin == AGENT_ALLOWED_ORIGIN:
+        if request_origin and (request_origin == AGENT_ALLOWED_ORIGIN or _is_localhost_origin(request_origin)):
             return request_origin
         return AGENT_ALLOWED_ORIGIN
 
