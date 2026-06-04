@@ -61,7 +61,7 @@ The HLS pipeline was reviewed after implementation. The findings below were all 
 
 These are inherent to browser-based DRM and are accepted for a prototype:
 
-- **Screen and camera capture** of the rendered frame cannot be prevented in the browser; the moving and forensic watermarks are the mitigation.
+- **Screen and camera capture** of the rendered frame cannot be *prevented* in the browser; the moving and forensic watermarks are the mitigation. The agent *detects* an active OS recording (e.g. the GNOME/Ubuntu built-in recorder, by its open screencast file) and blocks playback while it runs, but on Wayland a user-space agent cannot block the compositor's own capture — only detect it. A determined user can record before loading the player, or via hardware out of the agent's view.
 - **DevTools and extensions** run above page JavaScript and can override client protections; the server perimeter (encryption + key grants) is the real control.
 - **The localhost agent** can be killed or spoofed by a user with local control.
 - **Device fingerprinting** is low-entropy and spoofable; it is defense-in-depth, not an identity guarantee.

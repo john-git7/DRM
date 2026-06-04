@@ -212,6 +212,97 @@ def detect_capture_devices():
     return sorted(set(matched))
 
 
+# --- Active screen-recording detection (compositor-integrated, e.g. GNOME) ---
+#
+# The GNOME/Ubuntu built-in recorder runs *inside* gnome-shell, so there is no
+# distinct process to match. Instead we detect a recording that is actually in
+# progress: a process holding an open file descriptor to a screencast output file
+# (reliable), with a recent-mtime fallback. This catches the OS built-in recorder
+# and anything else writing to the Screencasts folder, but only while it is active.
+
+def _screencast_dirs():
+    home = os.path.expanduser("~")
+    dirs = [os.path.join(home, "Videos", "Screencasts"), os.path.join(home, "Videos")]
+    try:
+        out = subprocess.check_output(["xdg-user-dir", "VIDEOS"], stderr=subprocess.DEVNULL, text=True, timeout=3).strip()
+        if out:
+            dirs.append(out)
+            dirs.append(os.path.join(out, "Screencasts"))
+    except Exception:
+        pass
+    seen, result = set(), []
+    for d in dirs:
+        rd = os.path.realpath(d)
+        if rd not in seen and os.path.isdir(rd):
+            seen.add(rd)
+            result.append(rd)
+    return result
+
+
+def _looks_like_screencast(name):
+    low = name.lower()
+    return low.startswith("screencast") and low.endswith((".webm", ".mp4", ".mkv", ".ogv"))
+
+
+def _open_fd_holder(dirs):
+    """Process name holding an open screencast file, or None. Linux /proc only."""
+    if not os.path.isdir("/proc"):
+        return None
+    try:
+        pids = [p for p in os.listdir("/proc") if p.isdigit()]
+    except OSError:
+        return None
+    for pid in pids:
+        fd_dir = "/proc/%s/fd" % pid
+        try:
+            fds = os.listdir(fd_dir)
+        except OSError:
+            continue
+        for fd in fds:
+            try:
+                target = os.readlink(os.path.join(fd_dir, fd))
+            except OSError:
+                continue
+            base = os.path.basename(target)
+            if _looks_like_screencast(base) and any(target.startswith(d + os.sep) for d in dirs):
+                try:
+                    with open("/proc/%s/comm" % pid, encoding="utf-8") as f:
+                        comm = f.read().strip()
+                except OSError:
+                    comm = "pid " + pid
+                return "%s (%s)" % (comm, base)
+    return None
+
+
+def detect_active_screencast():
+    """Return a one-item list naming an in-progress screen recording, else []."""
+    if platform.system() != "Linux":
+        return []  # macOS/Windows built-ins surface as distinct processes (handled above)
+    dirs = _screencast_dirs()
+    if not dirs:
+        return []
+
+    holder = _open_fd_holder(dirs)
+    if holder:
+        return ["Active screen recording — %s" % holder]
+
+    # Fallback: a screencast file written within the last few seconds.
+    now = time.time()
+    for d in dirs:
+        try:
+            entries = os.listdir(d)
+        except OSError:
+            continue
+        for name in entries:
+            if _looks_like_screencast(name):
+                try:
+                    if now - os.path.getmtime(os.path.join(d, name)) < 8:
+                        return ["Active screen recording — %s" % name]
+                except OSError:
+                    pass
+    return []
+
+
 # --- Browser extension detection ---------------------------------------------
 
 def _chrome_user_data_dirs():
@@ -360,11 +451,14 @@ def _cached_scans():
 def build_status():
     proc_threats = detect_processes()
     capture_devices, extensions = _cached_scans()
+    active_recording = detect_active_screencast()  # fresh each call — must be timely
 
     recorders = [p["name"] for p in proc_threats if p["category"] != "Video downloader"]
+    recorders += active_recording
     downloaders = [p["name"] for p in proc_threats if p["category"] == "Video downloader"]
 
     threats = list(proc_threats)
+    threats += [{"category": "Screen recording", "name": n} for n in active_recording]
     threats += [{"category": "Capture device", "name": n} for n in capture_devices]
     threats += [{"category": "Browser extension", "name": n} for n in extensions]
 
