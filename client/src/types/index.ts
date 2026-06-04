@@ -8,6 +8,7 @@ export interface Video {
   mimeType?: string;
   hlsStatus?: 'processing' | 'ready' | 'failed';
   hlsPlaylist?: string;
+  hlsProgress?: number;
 }
 
 export interface DevToolsStatus {

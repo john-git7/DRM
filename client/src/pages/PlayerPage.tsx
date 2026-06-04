@@ -129,20 +129,18 @@ export default function PlayerPage() {
     return () => { cancelled = true; };
   }, [filename, preparePlayback]);
 
-  // Poll while the video is still being encrypted.
+  // Poll while encrypting — refresh each tick so the progress bar advances.
   useEffect(() => {
-    if (!video || video.hlsStatus !== 'processing') return;
+    if (video?.hlsStatus !== 'processing') return;
     const poll = setInterval(async () => {
       try {
         const res = await apiClient.get<Video>(`/videos/${filename}`);
-        if (res.data.hlsStatus !== 'processing') {
-          setVideo(res.data);
-          if (res.data.hlsStatus === 'ready') preparePlayback(res.data);
-        }
+        setVideo(res.data);
+        if (res.data.hlsStatus === 'ready') preparePlayback(res.data);
       } catch { /* keep polling */ }
-    }, 3000);
+    }, 2000);
     return () => clearInterval(poll);
-  }, [video, filename, preparePlayback]);
+  }, [filename, video?.hlsStatus, preparePlayback]);
 
   // Re-check the agent mid-session every 2.5s so a recorder launched after playback
   // starts triggers an near-instant blackout (the recorder then captures only black).
@@ -215,7 +213,7 @@ export default function PlayerPage() {
           </div>
         </div>
       ) : video && video.hlsStatus !== 'ready' ? (
-        <VideoStatusCard status={video.hlsStatus} onRetry={reprocess} />
+        <VideoStatusCard status={video.hlsStatus} progress={video.hlsProgress} onRetry={reprocess} />
       ) : video ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
@@ -366,8 +364,9 @@ export default function PlayerPage() {
   );
 }
 
-function VideoStatusCard({ status, onRetry }: { status?: string; onRetry: () => void }) {
+function VideoStatusCard({ status, progress, onRetry }: { status?: string; progress?: number; onRetry: () => void }) {
   const failed = status === 'failed';
+  const pct = Math.max(0, Math.min(100, Math.round(progress ?? 0)));
   return (
     <div className="brutal-card p-10 max-w-xl mx-auto text-center">
       {failed ? <AlertCircle className="w-12 h-12 text-[#ef4444] mx-auto mb-4" /> : <Loader2 className="w-12 h-12 text-[#7c3aed] mx-auto mb-4 animate-spin" />}
@@ -377,8 +376,19 @@ function VideoStatusCard({ status, onRetry }: { status?: string; onRetry: () => 
       <p className="text-gray-400 text-sm font-mono mb-6">
         {failed
           ? 'This video could not be transcoded into a secure stream. You can try again.'
-          : 'This video is being split into AES-128 encrypted segments. This page will continue automatically.'}
+          : 'Splitting into AES-128 encrypted segments. This page continues automatically when done.'}
       </p>
+      {!failed && (
+        <div className="max-w-sm mx-auto mb-6">
+          <div className="h-3 w-full bg-[#0a0a0a] border-2 border-white/20 overflow-hidden">
+            <div
+              className="h-full bg-[#7c3aed] transition-[width] duration-500 ease-out"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs font-mono text-gray-500 tracking-widest">{pct}% ENCRYPTED</p>
+        </div>
+      )}
       <div className="flex gap-3 justify-center">
         {failed && <button onClick={onRetry} className="brutal-btn">Retry Encryption</button>}
         <Link to="/" className="brutal-btn-ghost">Return to Library</Link>
