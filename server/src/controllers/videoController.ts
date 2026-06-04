@@ -18,10 +18,13 @@ import {
   getVideoByFilename,
   createVideo,
   updateVideo,
+  removeVideo,
   syncUploadsToJson,
   getVideoFilePath
 } from '../services/videoService';
 import { transcodeToHls } from '../services/hlsService';
+import { deleteKey } from '../services/keyService';
+import { STREAMS_DIR } from '../config/paths';
 
 /**
  * GET /api/videos
@@ -83,24 +86,97 @@ export function uploadVideo(
   }
 
   const newVideo = createVideo(req.file, title);
-  updateVideo(newVideo.id, { hlsStatus: 'processing' });
-
-  // Kick off AES-128 HLS transcoding in the background and respond immediately.
-  // Status is tracked on the video record; clients poll GET /api/videos/:filename.
-  transcodeToHls(newVideo.id, savedPath)
-    .then(({ relativePlaylistUrl }) => {
-      updateVideo(newVideo.id, { hlsStatus: 'ready', hlsPlaylist: relativePlaylistUrl });
-      console.log(`HLS encryption ready for ${newVideo.id}`);
-    })
-    .catch((err: Error) => {
-      updateVideo(newVideo.id, { hlsStatus: 'failed' });
-      console.error(`HLS transcode failed for ${newVideo.id}: ${err.message}`);
-    });
+  startTranscode(newVideo.id, savedPath);
 
   res.status(201).json({
     message: 'Video uploaded successfully! AES-128 HLS encryption in progress.',
     video: { ...newVideo, hlsStatus: 'processing' as const }
   });
+}
+
+/**
+ * Mark a video processing and run AES-128 HLS transcoding in the background.
+ * Status is tracked on the video record; clients poll GET /api/videos/:filename.
+ */
+function startTranscode(id: string, inputPath: string): void {
+  updateVideo(id, { hlsStatus: 'processing' });
+  transcodeToHls(id, inputPath)
+    .then(({ relativePlaylistUrl }) => {
+      updateVideo(id, { hlsStatus: 'ready', hlsPlaylist: relativePlaylistUrl });
+      // Content is now AES-128 HLS only — discard the original unencrypted MP4.
+      fs.promises.unlink(inputPath).catch(() => { /* already gone */ });
+      console.log(`HLS encryption ready for ${id}`);
+    })
+    .catch((err: Error) => {
+      updateVideo(id, { hlsStatus: 'failed' });
+      console.error(`HLS transcode failed for ${id}: ${err.message}`);
+    });
+}
+
+/**
+ * POST /api/videos/:filename/transcode
+ * (Re)start AES-128 HLS encryption for a video whose stream is missing or failed —
+ * e.g. legacy uploads that predate the HLS pipeline. Requires the raw source file
+ * to still exist in uploads/.
+ */
+export function reprocessVideo(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const safeFilename = path.basename(req.params.filename);
+  const video = getVideoByFilename(safeFilename);
+  if (!video) {
+    next(new AppError('Video metadata not found', 404));
+    return;
+  }
+  if (video.hlsStatus === 'processing') {
+    res.status(202).json({ message: 'Already processing', video });
+    return;
+  }
+
+  const sourcePath = getVideoFilePath(safeFilename);
+  if (!fs.existsSync(sourcePath)) {
+    next(new AppError('Source video is unavailable; please re-upload it.', 409));
+    return;
+  }
+
+  startTranscode(video.id, sourcePath);
+  res.status(202).json({
+    message: 'AES-128 HLS encryption started.',
+    video: { ...video, hlsStatus: 'processing' as const }
+  });
+}
+
+/**
+ * DELETE /api/videos/:filename
+ * Permanently remove a video: its HLS stream, AES-128 key, original source (if any),
+ * and metadata entry.
+ */
+export function deleteVideo(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const safeFilename = path.basename(req.params.filename);
+  const video = getVideoByFilename(safeFilename);
+  if (!video) {
+    next(new AppError('Video not found', 404));
+    return;
+  }
+
+  const id = path.basename(video.id);
+  // Encrypted HLS segments + playlist.
+  fs.rmSync(path.join(STREAMS_DIR, id), { recursive: true, force: true });
+  // Decryption key.
+  deleteKey(id);
+  // Original source, if it still exists.
+  const source = getVideoFilePath(safeFilename);
+  if (fs.existsSync(source)) fs.unlinkSync(source);
+  // Metadata entry.
+  removeVideo(video.id);
+
+  res.status(200).json({ deleted: true, id: video.id });
 }
 
 /**

@@ -212,6 +212,65 @@ def detect_capture_devices():
     return sorted(set(matched))
 
 
+# --- Active screen-recording / capture detection (Linux) ---------------------
+#
+# A recorder writes its output to a video file while it captures (a media player
+# only *reads*). We detect any process holding a video file open for WRITING,
+# regardless of the file's name or folder — so OBS, the GNOME built-in
+# (gnome-shell), Kooha, ffmpeg, and a recorder that names files "Video_<time>.mp4"
+# are all caught while active. Our own HLS pipeline (/streams/, /uploads/) is
+# excluded so transcoding never self-triggers.
+
+_RECORD_VIDEO_EXTS = (".mp4", ".webm", ".mkv", ".mov", ".flv", ".ogv", ".avi", ".m4v")
+_PIPELINE_MARKERS = (os.sep + "streams" + os.sep, os.sep + "uploads" + os.sep)
+
+
+def _fd_is_writable(pid, fd):
+    """True if the given fd is open for writing (O_WRONLY/O_RDWR), per /proc fdinfo."""
+    try:
+        with open("/proc/%s/fdinfo/%s" % (pid, fd), encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("flags:"):
+                    return (int(line.split()[1], 8) & 3) in (1, 2)
+    except OSError:
+        pass
+    return False
+
+
+def detect_active_recording():
+    """Name a process actively writing a video file (recording), else []. Linux /proc."""
+    if platform.system() != "Linux" or not os.path.isdir("/proc"):
+        return []
+    try:
+        pids = [p for p in os.listdir("/proc") if p.isdigit()]
+    except OSError:
+        return []
+    for pid in pids:
+        fd_dir = "/proc/%s/fd" % pid
+        try:
+            fds = os.listdir(fd_dir)
+        except OSError:
+            continue
+        for fd in fds:
+            try:
+                target = os.readlink(os.path.join(fd_dir, fd))
+            except OSError:
+                continue
+            if not target.lower().endswith(_RECORD_VIDEO_EXTS):
+                continue
+            if any(m in target for m in _PIPELINE_MARKERS):
+                continue  # our own HLS output / uploads — not a capture
+            if not _fd_is_writable(pid, fd):
+                continue  # a player/reader, not a recorder
+            try:
+                with open("/proc/%s/comm" % pid, encoding="utf-8") as f:
+                    comm = f.read().strip()
+            except OSError:
+                comm = "pid " + pid
+            return ["Active screen recording — %s (%s)" % (comm, os.path.basename(target))]
+    return []
+
+
 # --- Browser extension detection ---------------------------------------------
 
 def _chrome_user_data_dirs():
@@ -360,11 +419,14 @@ def _cached_scans():
 def build_status():
     proc_threats = detect_processes()
     capture_devices, extensions = _cached_scans()
+    active_recording = detect_active_recording()  # fresh each call — must be timely
 
     recorders = [p["name"] for p in proc_threats if p["category"] != "Video downloader"]
+    recorders += active_recording
     downloaders = [p["name"] for p in proc_threats if p["category"] == "Video downloader"]
 
     threats = list(proc_threats)
+    threats += [{"category": "Screen recording", "name": n} for n in active_recording]
     threats += [{"category": "Capture device", "name": n} for n in capture_devices]
     threats += [{"category": "Browser extension", "name": n} for n in extensions]
 

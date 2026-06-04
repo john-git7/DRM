@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ARQX Atlas agent — WiX MSI source. Build on Windows with the WiX Toolset:
+       candle arqx-agent.wxs && light -ext WixUtilExtension arqx-agent.wixobj -o arqx-agent.msi
+     or on Linux/macOS with msitools (wixl):
+       wixl -o arqx-agent.msi arqx-agent.wxs
+     Place arqx-agent-windows-amd64.exe + signatures.json next to this file first.
+     Installs the agent and a per-user logon Run entry so it auto-starts. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="ARQX Atlas Agent" Language="1033" Version="2.0.0"
+           Manufacturer="ARQX Atlas" UpgradeCode="6f1b1d2e-3a4b-4c5d-8e9f-arqxatlas001">
+    <Package InstallerVersion="300" Compressed="yes" InstallScope="perUser" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="INSTALLFOLDER" Name="ARQX Atlas Agent">
+          <Component Id="AgentExe" Guid="*">
+            <File Id="arqxAgentExe" Source="arqx-agent-windows-amd64.exe" Name="arqx-agent.exe" KeyPath="yes" />
+            <File Id="signatures" Source="signatures.json" />
+            <!-- Auto-start at logon (console exe is not service-aware; a Run key is reliable). -->
+            <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                           Name="ArqxAtlasAgent" Type="string"
+                           Value="[INSTALLFOLDER]arqx-agent.exe" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="Main" Title="ARQX Atlas Agent" Level="1">
+      <ComponentRef Id="AgentExe" />
+    </Feature>
+  </Product>
+</Wix>

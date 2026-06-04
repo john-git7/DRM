@@ -4,6 +4,8 @@ import {
   listVideos,
   getVideoMeta,
   uploadVideo,
+  reprocessVideo,
+  deleteVideo,
 } from '../controllers/videoController';
 import {
   serveHlsPlaylist,
@@ -25,6 +27,12 @@ router.get('/videos', requireAuth, listVideos);
 
 // GET /api/videos/:filename — video metadata (auth required)
 router.get('/videos/:filename', requireAuth, getVideoMeta);
+
+// POST /api/videos/:filename/transcode — (re)start HLS encryption for legacy/failed videos
+router.post('/videos/:filename/transcode', requireAuth, reprocessVideo);
+
+// DELETE /api/videos/:filename — permanently delete a video (stream, key, source, metadata)
+router.delete('/videos/:filename', requireAuth, deleteVideo);
 
 // --- Encrypted HLS delivery (Phase 1) + key server (Phase 2) ---
 // Literal paths declared before the :segment catch-all so they take precedence.

@@ -2,6 +2,7 @@
 # local enrollment data, or audit logs
 uploads/
 streams/
+server/data/videos.json
 server/data/keys.json
 server/data/enrollments.json
 server/data/audit-log.json
@@ -23,6 +24,7 @@ __pycache__/
 # Agent build artifacts
 agent/dist/
 agent/build/
+agent-go/dist/
 *.deb
 
 # Env

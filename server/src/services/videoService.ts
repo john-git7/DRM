@@ -56,6 +56,18 @@ export function updateVideo(id: string, patch: Partial<Video>): Video | undefine
 }
 
 /**
+ * Remove a video's metadata entry by id. Returns true if an entry was removed.
+ * (Stream files / key / source are removed by the controller.)
+ */
+export function removeVideo(id: string): boolean {
+  const videos = getVideos();
+  const next = videos.filter((v) => v.id !== id);
+  if (next.length === videos.length) return false;
+  saveVideos(next);
+  return true;
+}
+
+/**
  * Create a new video entry and save it to the database
  * - Uses file metadata (size, name) from Multer file object
  * - Uses title from request body if provided, otherwise derives from originalname

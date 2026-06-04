@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, FileVideo, Calendar, HardDrive, ShieldCheck, Film } from 'lucide-react';
+import { Play, FileVideo, Calendar, HardDrive, ShieldCheck, Film, Trash2 } from 'lucide-react';
 import apiClient from '../utils/apiClient';
 import { formatBytes, formatDate } from '../utils/format';
 import type { Video } from '../types';
@@ -9,6 +9,22 @@ export default function LibraryPage() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (e: React.MouseEvent, video: Video) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm(`Delete "${video.title}" permanently? This removes its encrypted stream and key.`)) return;
+    setDeletingId(video.id);
+    try {
+      await apiClient.delete(`/videos/${video.id}`);
+      setVideos((prev) => prev.filter((v) => v.id !== video.id));
+    } catch {
+      setError('Failed to delete the video. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchVideos = async () => {
@@ -107,6 +123,17 @@ export default function LibraryPage() {
                     Protected
                   </span>
                 </div>
+
+                {/* Delete */}
+                <button
+                  onClick={(e) => handleDelete(e, video)}
+                  disabled={deletingId === video.id}
+                  title="Delete video"
+                  aria-label="Delete video"
+                  className="absolute top-3 left-3 z-10 p-1.5 bg-black/70 border-2 border-white/20 text-gray-400 hover:text-white hover:border-[#ef4444] hover:bg-[#ef4444]/20 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
 
                 {/* Play hover */}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

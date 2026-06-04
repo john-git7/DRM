@@ -13,6 +13,7 @@ The `/status` response reports threats in four categories, and a single `clean` 
 1. **Running processes** — screen recorders (OBS, Streamlabs, Bandicam, Camtasia, NVIDIA ShadowPlay, Fraps, Dxtory, ShareX, Snagit, and more), the **Windows Snipping Tool / Snip & Sketch** and other screenshot tools, and **video downloaders** (Internet Download Manager, yt-dlp/youtube-dl, JDownloader, 4K Video Downloader, ffmpeg, VLC stream dump, and others).
 2. **Browser extensions** — known video-downloader / screen-recorder / stream-capture add-ons installed in Chrome, Edge, Brave, Chromium, Opera, Vivaldi, and Firefox, matched by extension id and by manifest-name keywords.
 3. **Hardware capture devices** — HDMI/USB capture cards (Elgato, AVerMedia, Magewell, Blackmagic/DeckLink, Epiphan, Razer Ripsaw, and others) enumerated from the OS device tree.
+4. **Active OS screen recording (Linux)** — the GNOME/Ubuntu built-in recorder runs *inside* `gnome-shell`, so there is no separate process to match. The agent instead detects a recording **in progress**: a process holding an open file descriptor to a screencast output file (`~/Videos/Screencasts/…`), with a recent-mtime fallback. This catches the OS built-in recorder while it is recording, and clears as soon as it stops. (The macOS/Windows built-in recorders surface as distinct processes and are handled by category 1.)
 
 All signatures live in [`signatures.json`](./signatures.json) and can be extended without touching the code.
 
