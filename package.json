@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "DRMShield — run the server, client, and ARQX Atlas agent together",
   "scripts": {
-    "dev": "concurrently -k -n server,client,agent -c blue,green,magenta \"CLIENT_ORIGIN=http://localhost:${CLIENT_PORT:-5173} npm --prefix server run dev\" \"npm --prefix client run dev -- --port ${CLIENT_PORT:-5173} --strictPort\" \"AGENT_ALLOWED_ORIGIN=http://localhost:${CLIENT_PORT:-5173} python3 agent/agent.py\"",
+    "predev": "sh scripts/free-ports.sh 5000 ${CLIENT_PORT:-5180} 7891",
+    "dev": "concurrently -k -n server,client,agent -c blue,green,magenta \"CLIENT_ORIGIN=http://localhost:${CLIENT_PORT:-5180} npm --prefix server run dev\" \"npm --prefix client run dev -- --port ${CLIENT_PORT:-5180} --strictPort\" \"AGENT_ALLOWED_ORIGIN=http://localhost:${CLIENT_PORT:-5180} python3 agent/agent.py\"",
     "install:all": "npm install && npm --prefix server install && npm --prefix client install"
   },
   "devDependencies": {
