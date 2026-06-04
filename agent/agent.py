@@ -277,6 +277,39 @@ def detect_active_recording():
     return []
 
 
+# --- Active screen sharing / streaming detection (Wayland / PipeWire) ---------
+#
+# Discord/Zoom/OBS/browser "share screen" write no file — they capture the screen
+# via xdg-desktop-portal -> PipeWire and stream it over the network. While a cast is
+# active the compositor produces a "Stream/Output/Video" node; it does not exist
+# otherwise. So that node's presence = the screen is being captured/streamed right now.
+
+_SHARE_APPS = ("Discord", "WEBRTC", "OBS", "Zoom", "Teams", "Chrome", "Chromium",
+               "Firefox", "Slack", "Skype", "Webex", "Telegram", "AnyDesk", "vlc")
+
+
+def detect_screen_sharing():
+    """Detect an active PipeWire screencast (screen share/stream), else []. Linux."""
+    if platform.system() != "Linux":
+        return []
+    env = dict(os.environ)
+    env.setdefault("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid())
+    out = ""
+    for cmd in (["pw-cli", "ls", "Node"], ["pw-dump"]):
+        try:
+            out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True, timeout=5, env=env)
+            if out.strip():
+                break
+        except Exception:
+            out = ""
+    if "Stream/Output/Video" not in out:
+        return []
+    low = out.lower()
+    apps = [a for a in _SHARE_APPS if a.lower() in low]
+    label = ", ".join(dict.fromkeys(apps)) or "an app"
+    return ["Active screen sharing/streaming — %s" % label]
+
+
 # --- Browser extension detection ---------------------------------------------
 
 def _chrome_user_data_dirs():
@@ -426,13 +459,15 @@ def build_status():
     proc_threats = detect_processes()
     capture_devices, extensions = _cached_scans()
     active_recording = detect_active_recording()  # fresh each call — must be timely
+    screen_sharing = detect_screen_sharing()      # fresh each call — must be timely
 
     recorders = [p["name"] for p in proc_threats if p["category"] != "Video downloader"]
-    recorders += active_recording
+    recorders += active_recording + screen_sharing
     downloaders = [p["name"] for p in proc_threats if p["category"] == "Video downloader"]
 
     threats = list(proc_threats)
     threats += [{"category": "Screen recording", "name": n} for n in active_recording]
+    threats += [{"category": "Screen sharing", "name": n} for n in screen_sharing]
     threats += [{"category": "Capture device", "name": n} for n in capture_devices]
     threats += [{"category": "Browser extension", "name": n} for n in extensions]
 

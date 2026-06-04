@@ -387,6 +387,57 @@ func detectActiveRecording() []string {
 	return []string{}
 }
 
+// --- Active screen sharing / streaming (Wayland / PipeWire) -------------------
+//
+// Discord/Zoom/OBS/browser "share screen" write no file — they capture via
+// xdg-desktop-portal -> PipeWire and stream over the network. While a cast is active
+// the compositor produces a "Stream/Output/Video" node; otherwise it does not exist.
+
+var shareApps = []string{"Discord", "WEBRTC", "OBS", "Zoom", "Teams", "Chrome", "Chromium",
+	"Firefox", "Slack", "Skype", "Webex", "Telegram", "AnyDesk", "vlc"}
+
+func runPwCmd(name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = os.Environ()
+	if os.Getenv("XDG_RUNTIME_DIR") == "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("XDG_RUNTIME_DIR=/run/user/%d", os.Getuid()))
+	}
+	out, err := cmd.Output()
+	return string(out), err
+}
+
+func detectScreenSharing() []string {
+	if runtime.GOOS != "linux" {
+		return []string{}
+	}
+	out := ""
+	for _, c := range [][]string{{"pw-cli", "ls", "Node"}, {"pw-dump"}} {
+		if o, err := runPwCmd(c[0], c[1:]...); err == nil && strings.TrimSpace(o) != "" {
+			out = o
+			break
+		}
+	}
+	if !strings.Contains(out, "Stream/Output/Video") {
+		return []string{}
+	}
+	low := strings.ToLower(out)
+	seen := map[string]bool{}
+	var apps []string
+	for _, a := range shareApps {
+		if strings.Contains(low, strings.ToLower(a)) && !seen[a] {
+			seen[a] = true
+			apps = append(apps, a)
+		}
+	}
+	label := strings.Join(apps, ", ")
+	if label == "" {
+		label = "an app"
+	}
+	return []string{"Active screen sharing/streaming — " + label}
+}
+
 // --- browser extension detection ---------------------------------------------
 
 func chromeUserDataDirs() []string {
@@ -559,6 +610,7 @@ func buildStatus() status {
 	proc := detectProcesses()
 	devices, exts := cachedScans()
 	active := detectActiveRecording()
+	sharing := detectScreenSharing()
 
 	recorders := []string{}
 	downloaders := []string{}
@@ -570,11 +622,15 @@ func buildStatus() status {
 		}
 	}
 	recorders = append(recorders, active...)
+	recorders = append(recorders, sharing...)
 
 	threats := []threat{}
 	threats = append(threats, proc...)
 	for _, n := range active {
 		threats = append(threats, threat{Category: "Screen recording", Name: n})
+	}
+	for _, n := range sharing {
+		threats = append(threats, threat{Category: "Screen sharing", Name: n})
 	}
 	for _, n := range devices {
 		threats = append(threats, threat{Category: "Capture device", Name: n})
