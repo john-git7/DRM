@@ -11,11 +11,18 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
  */
 function ensureDirectories(): void {
   const uploadsDir = path.join(__dirname, '../../uploads');
+  const streamsDir = path.join(__dirname, '../../streams');
   const dataDir = path.join(__dirname, '../data');
 
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
     console.log(`Created uploads directory at: ${uploadsDir}`);
+  }
+
+  // Encrypted HLS output (playlists + segments) lives alongside uploads/.
+  if (!fs.existsSync(streamsDir)) {
+    fs.mkdirSync(streamsDir, { recursive: true });
+    console.log(`Created streams directory at: ${streamsDir}`);
   }
 
   if (!fs.existsSync(dataDir)) {
@@ -28,6 +35,28 @@ function ensureDirectories(): void {
   if (!fs.existsSync(dbPath)) {
     fs.writeFileSync(dbPath, JSON.stringify([], null, 2), 'utf-8');
     console.log(`Created metadata JSON file at: ${dbPath}`);
+  }
+
+  // Ensure the AES-128 key database exists (kept separate from streams/, gitignored).
+  const keysPath = path.join(dataDir, 'keys.json');
+  if (!fs.existsSync(keysPath)) {
+    fs.writeFileSync(keysPath, JSON.stringify({}, null, 2), 'utf-8');
+    console.log(`Created key database at: ${keysPath}`);
+  }
+
+  // Seed the enrollment map (Phase 2). The admin user is enrolled in everything ("*").
+  const enrollmentsPath = path.join(dataDir, 'enrollments.json');
+  if (!fs.existsSync(enrollmentsPath)) {
+    const admin = process.env.ADMIN_USERNAME || 'admin';
+    fs.writeFileSync(enrollmentsPath, JSON.stringify({ [admin]: '*' }, null, 2), 'utf-8');
+    console.log(`Created enrollment map at: ${enrollmentsPath}`);
+  }
+
+  // Ensure the audit log exists (Phase 6).
+  const auditPath = path.join(dataDir, 'audit-log.json');
+  if (!fs.existsSync(auditPath)) {
+    fs.writeFileSync(auditPath, JSON.stringify([], null, 2), 'utf-8');
+    console.log(`Created audit log at: ${auditPath}`);
   }
 }
 

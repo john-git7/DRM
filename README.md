@@ -166,7 +166,3 @@ Danger  #ef4444   Success #22c55e
 - [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) — earlier auth-layer vulnerability audit
 
 ---
-
-## Notes
-
-No test suite or containerization is configured; this is a local-development prototype. Deploy behind HTTPS and review [`SECURITY.md`](./SECURITY.md) before adapting it for any real use.

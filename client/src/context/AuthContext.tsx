@@ -5,6 +5,7 @@ import { API_BASE } from '../config/api';
 
 interface AuthContextValue {
   token: string | null;
+  username: string | null;
   isAuthenticated: boolean;
   login(username: string, password: string): Promise<void>;
   logout(): void;
@@ -20,6 +21,16 @@ function isTokenExpired(token: string): boolean {
     return payload.exp < Math.floor(Date.now() / 1000);
   } catch {
     return true;
+  }
+}
+
+function decodeUsername(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return typeof payload.username === 'string' ? payload.username : null;
+  } catch {
+    return null;
   }
 }
 
@@ -54,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [navigate]);
 
   return (
-    <AuthContext.Provider value={{ token, isAuthenticated: !!token, login, logout }}>
+    <AuthContext.Provider value={{ token, username: decodeUsername(token), isAuthenticated: !!token, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

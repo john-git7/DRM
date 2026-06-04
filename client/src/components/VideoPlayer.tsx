@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import Hls from 'hls.js';
 import {
   Play,
   Pause,
@@ -17,14 +18,19 @@ interface WatermarkPos {
 }
 
 export default function VideoPlayer({
-  src,
+  hlsUrl,
+  keyGrant,
+  deviceId,
   title,
   watermarkLabel = 'Demo User',
+  devToolsOpen = false,
+  onWatchTimeTick,
   focusLossDetectEnabled = true,
   rightClickProtectEnabled = true,
   keyboardProtectEnabled = true,
   watermarkEnabled = true,
   screenRecordWarningEnabled = true,
+  forensicWatermarkEnabled = true,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,6 +44,7 @@ export default function VideoPlayer({
   const [showControls, setShowControls] = useState(true);
   const [windowFocused, setWindowFocused] = useState(true);
   const [showCaptureWarning, setShowCaptureWarning] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [watermarkPos, setWatermarkPos] = useState<WatermarkPos>({ top: '15%', left: '15%' });
   const [watermarkTime, setWatermarkTime] = useState(() => new Date().toLocaleTimeString());
 
@@ -45,6 +52,58 @@ export default function VideoPlayer({
 
   useKeyboardProtection(undefined, keyboardProtectEnabled);
 
+  // --- HLS.js attach with grant-bound key loading (Phase 2 + 4) -------------
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !hlsUrl) return;
+
+    // DevTools open → never wire up the source (Phase 4 hardening).
+    if (devToolsOpen) return;
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        // Attach the 30-second signed grant + device fingerprint to the key request only.
+        xhrSetup: (xhr, url) => {
+          if (/\/key(\?|$)/.test(url)) {
+            xhr.setRequestHeader('X-Key-Grant', keyGrant);
+            xhr.setRequestHeader('X-Device-Id', deviceId);
+          }
+        },
+      });
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_evt, data) => {
+        if (data.fatal) {
+          setLoadError('Secure stream failed to load. Your access may have expired.');
+        }
+      });
+      return () => hls.destroy();
+    }
+
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native HLS (Safari) cannot attach the grant header to key requests, so the
+      // grant is passed as a query param instead.
+      video.src = `${hlsUrl}#`;
+      video.dataset.keyGrant = keyGrant;
+      return;
+    }
+
+    setLoadError('HLS playback is not supported in this browser.');
+  }, [hlsUrl, keyGrant, deviceId, devToolsOpen]);
+
+  // DevTools open → tear down the loaded source so frames cannot be inspected.
+  useEffect(() => {
+    if (!devToolsOpen) return;
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      setIsPlaying(false);
+    }
+  }, [devToolsOpen]);
+
+  // Moving watermark — repositions every 5s, live clock every 1s (Phase 6).
   useEffect(() => {
     const timeInterval = setInterval(() => {
       setWatermarkTime(new Date().toLocaleTimeString());
@@ -54,12 +113,22 @@ export default function VideoPlayer({
         top: `${Math.floor(Math.random() * 65) + 10}%`,
         left: `${Math.floor(Math.random() * 65) + 10}%`,
       });
-    }, 4000);
+    }, 5000);
     return () => { clearInterval(timeInterval); clearInterval(positionInterval); };
   }, []);
 
+  // Watch-time heartbeat for audit logging (Phase 6).
   useEffect(() => {
-    const handleBlur = () => {
+    if (!isPlaying || !onWatchTimeTick) return;
+    const tick = setInterval(() => {
+      if (videoRef.current) onWatchTimeTick(Math.floor(videoRef.current.currentTime));
+    }, 15000);
+    return () => clearInterval(tick);
+  }, [isPlaying, onWatchTimeTick]);
+
+  // Focus loss + tab visibility → pause (Phase 4).
+  useEffect(() => {
+    const pauseForFocusLoss = () => {
       if (!focusLossDetectEnabled) return;
       setWindowFocused(false);
       navigator.clipboard?.writeText('PROTECTED SECURE CONTENT - SCREENSHOT INTERCEPTED').catch(() => { });
@@ -73,9 +142,16 @@ export default function VideoPlayer({
       }
     };
     const handleFocus = () => setWindowFocused(true);
-    window.addEventListener('blur', handleBlur);
+    const handleVisibility = () => { if (document.hidden) pauseForFocusLoss(); };
+
+    window.addEventListener('blur', pauseForFocusLoss);
     window.addEventListener('focus', handleFocus);
-    return () => { window.removeEventListener('blur', handleBlur); window.removeEventListener('focus', handleFocus); };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('blur', pauseForFocusLoss);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [focusLossDetectEnabled, screenRecordWarningEnabled]);
 
   useEffect(() => {
@@ -96,15 +172,9 @@ export default function VideoPlayer({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  useEffect(() => {
-    if (videoRef.current && src) {
-      videoRef.current.src = src;
-      videoRef.current.load();
-    }
-  }, [src]);
-
   const togglePlay = () => {
     if (!windowFocused && focusLossDetectEnabled) return;
+    if (devToolsOpen) return;
     if (!videoRef.current) return;
     if (isPlaying) {
       videoRef.current.pause();
@@ -164,10 +234,28 @@ export default function VideoPlayer({
         ref={videoRef}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
-        className={`w-full h-full object-contain transition-all duration-300 ${isFocusLost ? 'blur-xl select-none pointer-events-none' : ''}`}
+        className={`w-full h-full object-contain transition-all duration-300 ${isFocusLost || devToolsOpen ? 'blur-xl select-none pointer-events-none' : ''}`}
         playsInline
+        controlsList="nodownload noremoteplayback"
+        disablePictureInPicture
+        disableRemotePlayback
         onContextMenu={(e) => e.preventDefault()}
       />
+
+      {/* Forensic watermark — faint, full-frame, per-user identity (Phase 6) */}
+      {forensicWatermarkEnabled && !isFocusLost && !devToolsOpen && (
+        <div
+          aria-hidden
+          className="absolute inset-0 z-10 pointer-events-none overflow-hidden flex flex-wrap content-start gap-x-6 gap-y-4 p-2 leading-none"
+          style={{ opacity: 0.035 }}
+        >
+          {Array.from({ length: 96 }).map((_, i) => (
+            <span key={i} className="text-[10px] font-mono text-white whitespace-nowrap rotate-[-20deg]">
+              {watermarkLabel}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Click shield */}
       <div
@@ -176,7 +264,7 @@ export default function VideoPlayer({
         onContextMenu={(e) => e.preventDefault()}
       />
 
-      {/* Watermark */}
+      {/* Moving visible watermark */}
       {watermarkEnabled && (
         <div
           style={{ top: watermarkPos.top, left: watermarkPos.left, transition: 'all 1s ease-in-out' }}
@@ -186,8 +274,17 @@ export default function VideoPlayer({
         </div>
       )}
 
+      {/* Load error overlay */}
+      {loadError && !devToolsOpen && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-40 text-center px-4">
+          <AlertTriangle className="w-10 h-10 text-[#ef4444] mb-3" />
+          <p className="text-[#ef4444] font-black text-sm uppercase tracking-wide mb-1">Stream Error</p>
+          <p className="text-gray-400 text-xs font-mono max-w-xs">{loadError}</p>
+        </div>
+      )}
+
       {/* Play overlay */}
-      {!isPlaying && !isFocusLost && (
+      {!isPlaying && !isFocusLost && !devToolsOpen && !loadError && (
         <div
           onClick={togglePlay}
           className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer z-10 hover:bg-black/50 transition-colors"

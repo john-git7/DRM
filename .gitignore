@@ -1,0 +1,29 @@
+# Runtime content — never commit raw uploads, encrypted HLS output, decryption keys,
+# local enrollment data, or audit logs
+uploads/
+streams/
+server/data/keys.json
+server/data/enrollments.json
+server/data/audit-log.json
+
+# Dependencies / build output (root dev-runner + workspaces)
+node_modules/
+/node_modules/
+dist/
+# Project standardizes on pnpm; ignore npm lockfiles
+package-lock.json
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Python bytecode (agent)
+__pycache__/
+*.pyc
+
+# Agent build artifacts
+agent/dist/
+agent/build/
+*.deb
+
+# Env
+.env

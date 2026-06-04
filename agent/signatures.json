@@ -1,0 +1,73 @@
+{
+  "processes": {
+    "Screen recorder": [
+      { "name": "OBS Studio", "match": ["obs", "obs64", "obs-studio", "obs32"] },
+      { "name": "Streamlabs", "match": ["streamlabs", "streamlabs obs", "slobs"] },
+      { "name": "Bandicam", "match": ["bandicam", "bdcam"] },
+      { "name": "Camtasia", "match": ["camtasia", "camtasiastudio", "camrecorder"] },
+      { "name": "NVIDIA ShadowPlay", "match": ["nvidia share", "nvsphelper", "nvcontainer", "nvshare", "nvspcaps"] },
+      { "name": "Fraps", "match": ["fraps"] },
+      { "name": "Dxtory", "match": ["dxtory"] },
+      { "name": "Action!", "match": ["action", "mirillis"] },
+      { "name": "XSplit", "match": ["xsplit"] },
+      { "name": "ScreenRec", "match": ["screenrec"] },
+      { "name": "ShareX", "match": ["sharex"] },
+      { "name": "Snagit", "match": ["snagit", "snagiteditor"] },
+      { "name": "Movavi", "match": ["movavi"] },
+      { "name": "Apowersoft", "match": ["apowersoft", "apowerrec"] },
+      { "name": "FlashBack", "match": ["flashback", "bbflashback"] },
+      { "name": "ScreenToGif", "match": ["screentogif"] },
+      { "name": "Icecream Recorder", "match": ["icecream"] },
+      { "name": "OBS variants / ffmpeg capture", "match": ["screencapture", "simplescreenrecorder", "vokoscreen", "kazam", "recordmydesktop", "wf-recorder"] },
+      { "name": "QuickTime Player", "match": ["quicktimeplayer", "quicktime player"] }
+    ],
+    "Snipping / screenshot tool": [
+      { "name": "Windows Snipping Tool", "match": ["snippingtool", "snipping tool"] },
+      { "name": "Windows Snip & Sketch", "match": ["screensketch", "screenclippinghost", "ms-screenclip", "screenclip"] },
+      { "name": "Greenshot", "match": ["greenshot"] },
+      { "name": "Lightshot", "match": ["lightshot", "skitch"] },
+      { "name": "Flameshot", "match": ["flameshot"] },
+      { "name": "Spectacle / GNOME Screenshot", "match": ["spectacle", "gnome-screenshot", "org.gnome.screenshot"] }
+    ],
+    "Video downloader": [
+      { "name": "Internet Download Manager", "match": ["idman", "idman", "internet download manager"] },
+      { "name": "youtube-dl / yt-dlp", "match": ["youtube-dl", "yt-dlp", "ytdl"] },
+      { "name": "JDownloader", "match": ["jdownloader", "jd2"] },
+      { "name": "4K Video Downloader", "match": ["4kvideodownloader", "4kdownload"] },
+      { "name": "Free Download Manager", "match": ["fdm", "freedownloadmanager"] },
+      { "name": "StreamFab / DVDFab", "match": ["streamfab", "dvdfab"] },
+      { "name": "Allavsoft", "match": ["allavsoft"] },
+      { "name": "ffmpeg (manual capture)", "match": ["ffmpeg"] },
+      { "name": "VLC (stream dump)", "match": ["vlc"] },
+      { "name": "Xtreme Download Manager", "match": ["xdman"] }
+    ]
+  },
+  "captureDeviceKeywords": [
+    "elgato", "cam link", "game capture", "avermedia", "live gamer", "magewell",
+    "blackmagic", "decklink", "intensity", "datapath", "epiphan", "ezcap",
+    "startech", "usb capture", "usb video", "hdmi capture", "video capture",
+    "capture card", "ugreen capture", "razer ripsaw", "aja", "ezcoo"
+  ],
+  "extensions": {
+    "ids": {
+      "lmjnegcaeklhafolokijcfjliaokphfk": "Video DownloadHelper",
+      "ibjkkfdnfcaoapcpncacjkmkebjpjfjm": "Stream Recorder",
+      "hpfceggmfomihjlhdmbldhmabjjbmmef": "FVD Video Downloader",
+      "dkphgomfhpkjepoflnjnhmibemladkog": "Flash Video Downloader",
+      "kcjmnlpglnhihigfdomkbccdmfocljln": "The Video Downloader",
+      "iccfnpkdhgddiaknbfpngmnpnjgmgojn": "Vimeo Video Downloader",
+      "gidimcjpamibmmnmgfphbhjkhhdconff": "Easy Video Downloader",
+      "knnnimagjlnoohelkncdkgoodhkbpmkc": "Video Downloader Plus",
+      "okponchclmbalkahnjnhhkknfpefkkog": "Tab Recorder / Screen capture",
+      "nlipoenfbbikpbjkfpfillcgkoblgpmj": "Awesome Screenshot & Recorder",
+      "ldcecbkkoecffmfljeihcmifjjdoepkn": "Screencastify",
+      "diipfdopcmacpdfemjcfmmnamddngmal": "Loom Screen Recorder"
+    },
+    "keywords": [
+      "video download", "video downloader", "downloadhelper", "stream record",
+      "stream recorder", "screen record", "screen recorder", "screen capture",
+      "screencast", "savefrom", "fbdown", "media download", "hls download",
+      "m3u8", "capture stream", "tab capture"
+    ]
+  }
+}

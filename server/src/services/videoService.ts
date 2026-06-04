@@ -42,6 +42,20 @@ export function getVideoByFilename(filename: string): Video | undefined {
 }
 
 /**
+ * Merge a partial patch into the video with the given id and persist.
+ * Used to track HLS transcoding state (hlsStatus, hlsPlaylist) out-of-band.
+ * Returns the updated Video, or undefined if no entry matches.
+ */
+export function updateVideo(id: string, patch: Partial<Video>): Video | undefined {
+  const videos = getVideos();
+  const idx = videos.findIndex((v) => v.id === id);
+  if (idx === -1) return undefined;
+  videos[idx] = { ...videos[idx], ...patch };
+  saveVideos(videos);
+  return videos[idx];
+}
+
+/**
  * Create a new video entry and save it to the database
  * - Uses file metadata (size, name) from Multer file object
  * - Uses title from request body if provided, otherwise derives from originalname
