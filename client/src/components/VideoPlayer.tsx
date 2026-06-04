@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Hls from 'hls.js';
+import QRCode from 'qrcode';
 import {
   Play,
   Pause,
@@ -47,6 +48,12 @@ export default function VideoPlayer({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [watermarkPos, setWatermarkPos] = useState<WatermarkPos>({ top: '15%', left: '15%' });
   const [watermarkTime, setWatermarkTime] = useState(() => new Date().toLocaleTimeString());
+
+  // Forensic QR: flashes at random positions/intervals, each encoding the viewer's
+  // identity + device + the exact time, so any captured frame decodes back to them.
+  const [qrSrc, setQrSrc] = useState<string | null>(null);
+  const [qrVisible, setQrVisible] = useState(false);
+  const [qrPos, setQrPos] = useState<WatermarkPos>({ top: '40%', left: '40%' });
 
   const tabSwitchCount = useRef(0);
 
@@ -116,6 +123,42 @@ export default function VideoPlayer({
     }, 5000);
     return () => { clearInterval(timeInterval); clearInterval(positionInterval); };
   }, []);
+
+  // Forensic QR pop-up — appears briefly at a random spot on a random interval.
+  // Intermittent + unpredictable defeats motion-tracking removal in video editors,
+  // and every flash encodes identity + device + timestamp for leak attribution.
+  useEffect(() => {
+    if (!forensicWatermarkEnabled || devToolsOpen) return;
+    let showTimer = 0;
+    let hideTimer = 0;
+    let cancelled = false;
+
+    const schedule = () => {
+      const delay = 3500 + Math.random() * 6500; // every ~3.5–10s
+      showTimer = window.setTimeout(async () => {
+        if (cancelled) return;
+        const payload = `DRMSHIELD|${watermarkLabel}|${deviceId}|${new Date().toISOString()}`;
+        try {
+          const url = await QRCode.toDataURL(payload, { margin: 1, width: 132, errorCorrectionLevel: 'Q' });
+          if (cancelled) return;
+          setQrSrc(url);
+          setQrPos({ top: `${Math.floor(Math.random() * 72) + 6}%`, left: `${Math.floor(Math.random() * 72) + 6}%` });
+          setQrVisible(true);
+          const duration = 650 + Math.random() * 900; // visible 0.65–1.55s
+          hideTimer = window.setTimeout(() => {
+            if (cancelled) return;
+            setQrVisible(false);
+            schedule();
+          }, duration);
+        } catch {
+          schedule();
+        }
+      }, delay);
+    };
+    schedule();
+
+    return () => { cancelled = true; clearTimeout(showTimer); clearTimeout(hideTimer); setQrVisible(false); };
+  }, [forensicWatermarkEnabled, devToolsOpen, watermarkLabel, deviceId]);
 
   // Watch-time heartbeat for audit logging (Phase 6).
   useEffect(() => {
@@ -242,19 +285,16 @@ export default function VideoPlayer({
         onContextMenu={(e) => e.preventDefault()}
       />
 
-      {/* Forensic watermark — faint, full-frame, per-user identity (Phase 6) */}
-      {forensicWatermarkEnabled && !isFocusLost && !devToolsOpen && (
-        <div
+      {/* Forensic QR — intermittent, random position, encodes identity for leak tracing */}
+      {forensicWatermarkEnabled && qrVisible && qrSrc && !isFocusLost && !devToolsOpen && (
+        <img
+          src={qrSrc}
+          alt=""
           aria-hidden
-          className="absolute inset-0 z-10 pointer-events-none overflow-hidden flex flex-wrap content-start gap-x-6 gap-y-4 p-2 leading-none"
-          style={{ opacity: 0.035 }}
-        >
-          {Array.from({ length: 96 }).map((_, i) => (
-            <span key={i} className="text-[10px] font-mono text-white whitespace-nowrap rotate-[-20deg]">
-              {watermarkLabel}
-            </span>
-          ))}
-        </div>
+          draggable={false}
+          style={{ top: qrPos.top, left: qrPos.left, opacity: 0.6 }}
+          className="absolute w-[84px] h-[84px] z-20 pointer-events-none select-none rounded-sm"
+        />
       )}
 
       {/* Click shield */}

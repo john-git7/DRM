@@ -291,8 +291,8 @@ export default function PlayerPage() {
                 />
                 <SecurityRow
                   icon={<FileText className="w-4 h-4" />}
-                  label="Forensic Watermark"
-                  badge={<span className={`brutal-badge ${forensicWatermarkEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>{forensicWatermarkEnabled ? 'EMBEDDED' : 'OFF'}</span>}
+                  label="Forensic QR"
+                  badge={<span className={`brutal-badge ${forensicWatermarkEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>{forensicWatermarkEnabled ? 'FLASHING' : 'OFF'}</span>}
                   checked={forensicWatermarkEnabled}
                   onChange={setForensicWatermarkEnabled}
                 />
