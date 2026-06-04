@@ -2,6 +2,7 @@
 # local enrollment data, or audit logs
 uploads/
 streams/
+server/data/videos.json
 server/data/keys.json
 server/data/enrollments.json
 server/data/audit-log.json

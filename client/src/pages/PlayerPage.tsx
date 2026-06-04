@@ -97,13 +97,26 @@ export default function PlayerPage() {
         setError(null);
         const response = await apiClient.get<Video>(`/videos/${filename}`);
         if (cancelled) return;
-        setVideo(response.data);
+        const v = response.data;
+        setVideo(v);
 
-        if (response.data.hlsStatus !== 'ready') {
-          setLoading(false);
-          return; // status screen handles processing/failed
+        if (v.hlsStatus === 'ready') {
+          await preparePlayback(v);
+        } else if (v.hlsStatus !== 'processing') {
+          // No encrypted stream yet (legacy upload) or a prior failure — (re)start it,
+          // then let the poll effect below carry it to 'ready'.
+          try {
+            await apiClient.post(`/videos/${filename}/transcode`);
+            if (!cancelled) setVideo({ ...v, hlsStatus: 'processing' });
+          } catch (e) {
+            if (cancelled) return;
+            const code = axios.isAxiosError(e) ? e.response?.status : undefined;
+            setError(code === 409
+              ? 'This video has no encrypted stream and its source file is unavailable — please re-upload it.'
+              : 'Could not start encryption for this video.');
+          }
         }
-        await preparePlayback(response.data);
+        // 'processing' is handled by the poll effect.
       } catch (err) {
         if (cancelled) return;
         const is404 = axios.isAxiosError(err) && err.response?.status === 404;
@@ -154,6 +167,16 @@ export default function PlayerPage() {
   }, [devToolsOpen, filename]);
 
   const retry = () => { if (video) preparePlayback(video); };
+  const reprocess = async () => {
+    try {
+      await apiClient.post(`/videos/${filename}/transcode`);
+      setVideo((prev) => (prev ? { ...prev, hlsStatus: 'processing' } : prev));
+      setError(null);
+    } catch (e) {
+      const code = axios.isAxiosError(e) ? e.response?.status : undefined;
+      setError(code === 409 ? 'Source video unavailable — please re-upload it.' : 'Could not start encryption.');
+    }
+  };
   const playbackReady = video?.hlsStatus === 'ready' && agent.state === 'clean' && !!keyGrant;
 
   return (
@@ -192,7 +215,7 @@ export default function PlayerPage() {
           </div>
         </div>
       ) : video && video.hlsStatus !== 'ready' ? (
-        <VideoStatusCard status={video.hlsStatus} />
+        <VideoStatusCard status={video.hlsStatus} onRetry={reprocess} />
       ) : video ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
@@ -343,7 +366,7 @@ export default function PlayerPage() {
   );
 }
 
-function VideoStatusCard({ status }: { status?: string }) {
+function VideoStatusCard({ status, onRetry }: { status?: string; onRetry: () => void }) {
   const failed = status === 'failed';
   return (
     <div className="brutal-card p-10 max-w-xl mx-auto text-center">
@@ -352,9 +375,14 @@ function VideoStatusCard({ status }: { status?: string }) {
         {failed ? 'Encryption Failed' : 'Encrypting Video'}
       </p>
       <p className="text-gray-400 text-sm font-mono mb-6">
-        {failed ? 'This video could not be transcoded into a secure stream.' : 'This video is being split into AES-128 encrypted segments. This page will continue automatically.'}
+        {failed
+          ? 'This video could not be transcoded into a secure stream. You can try again.'
+          : 'This video is being split into AES-128 encrypted segments. This page will continue automatically.'}
       </p>
-      <Link to="/" className="brutal-btn-ghost">Return to Library</Link>
+      <div className="flex gap-3 justify-center">
+        {failed && <button onClick={onRetry} className="brutal-btn">Retry Encryption</button>}
+        <Link to="/" className="brutal-btn-ghost">Return to Library</Link>
+      </div>
     </div>
   );
 }

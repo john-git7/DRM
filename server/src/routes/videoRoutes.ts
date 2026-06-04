@@ -4,6 +4,7 @@ import {
   listVideos,
   getVideoMeta,
   uploadVideo,
+  reprocessVideo,
 } from '../controllers/videoController';
 import {
   serveHlsPlaylist,
@@ -25,6 +26,9 @@ router.get('/videos', requireAuth, listVideos);
 
 // GET /api/videos/:filename — video metadata (auth required)
 router.get('/videos/:filename', requireAuth, getVideoMeta);
+
+// POST /api/videos/:filename/transcode — (re)start HLS encryption for legacy/failed videos
+router.post('/videos/:filename/transcode', requireAuth, reprocessVideo);
 
 // --- Encrypted HLS delivery (Phase 1) + key server (Phase 2) ---
 // Literal paths declared before the :segment catch-all so they take precedence.
