@@ -34,6 +34,14 @@ const (
 	brand   = "ARQX Atlas"
 )
 
+// Pure-ASCII wordmark (renders in Windows cmd, macOS, and Linux terminals alike).
+const arqxASCII = "" +
+	"    A   RRRR   QQQ  X   X\n" +
+	"   A A  R   R Q   Q  X X \n" +
+	"  AAAAA RRRR  Q Q Q   X  \n" +
+	"  A   A R  R  Q  QQ  X X \n" +
+	"  A   A R   R  QQQQ X   X"
+
 //go:embed signatures.json
 var embeddedSignatures []byte
 
@@ -719,6 +727,7 @@ func main() {
 	for _, l := range sigs.Processes {
 		procCount += len(l)
 	}
+	fmt.Println(arqxASCII)
 	fmt.Println(strings.Repeat("=", 64))
 	fmt.Printf(" ARQX Atlas — DRMShield endpoint protection agent v%s (Go)\n", version)
 	fmt.Println(" Built by ARQX Atlas")

@@ -58,6 +58,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 VERSION = "2.0.0"
 BRAND = "ARQX Atlas"
 
+# Pure-ASCII wordmark (renders in Windows cmd, macOS, and Linux terminals alike).
+ARQX_ASCII = "\n".join((
+    "    A   RRRR   QQQ  X   X",
+    "   A A  R   R Q   Q  X X ",
+    "  AAAAA RRRR  Q Q Q   X  ",
+    "  A   A R  R  Q  QQ  X X ",
+    "  A   A R   R  QQQQ X   X",
+))
+
 # --- Configuration (env-overridable) ----------------------------------------
 
 AGENT_HOST = os.environ.get("AGENT_HOST", "127.0.0.1")
@@ -560,6 +569,7 @@ def main():
         sys.exit(1)
 
     procs, exts, caps = _signature_count()
+    print(ARQX_ASCII)
     print("=" * 64)
     print(" ARQX Atlas — DRMShield endpoint protection agent v{}".format(VERSION))
     print(" Built by ARQX Atlas")
