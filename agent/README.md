@@ -1,149 +1,89 @@
-# DRMShield Localhost Agent
+# ARQX Atlas — DRMShield endpoint protection agent
 
-The localhost agent is the Phase 3 proctoring component of DRMShield. It is a
-small, standalone program that a student runs on their own machine while
-watching protected content in the DRMShield web player. Its job is to detect
-whether a screen recorder is running and to report that fact to the browser so
-that the player can refuse to play protected video while a capture tool is
-active.
+> Built by ARQX Atlas.
 
-## What it does and why
+A small, standalone agent that a viewer runs on their own machine while watching protected content in the DRMShield web player. It listens on `localhost:7891` and exposes a read-only HTTP API. Before playback the browser-based player calls this agent; if a capture threat is detected, playback is blocked. If the agent is not running, the player shows an "install the agent" prompt.
 
-Client-side DRM in the browser cannot see other applications on the user's
-computer. A student can simply open OBS Studio or Bandicam alongside the player
-and record the screen. The localhost agent closes part of that gap. It runs
-outside the browser sandbox, enumerates the running processes on the machine,
-and matches them against a list of known screen-recorder signatures. The web
-player queries the agent before playback; if a recorder is detected, the player
-blocks playback and warns the user.
+It is **Python 3 standard library only** — no pip dependencies and no install step. It runs with a bare `python3 agent.py` on Windows, macOS, and Linux.
 
-This raises the bar for casual screen capture. It is deliberately **not** an
-absolute guarantee — see the limitations section below.
+## What it detects
 
-## The localhost:7891 contract with the player
+The `/status` response reports threats in four categories, and a single `clean` boolean that is `true` only when **nothing** was detected:
 
-The agent listens on `127.0.0.1:7891` and exposes a tiny, read-only HTTP API.
-The browser-based player calls it as follows:
+1. **Running processes** — screen recorders (OBS, Streamlabs, Bandicam, Camtasia, NVIDIA ShadowPlay, Fraps, Dxtory, ShareX, Snagit, and more), the **Windows Snipping Tool / Snip & Sketch** and other screenshot tools, and **video downloaders** (Internet Download Manager, yt-dlp/youtube-dl, JDownloader, 4K Video Downloader, ffmpeg, VLC stream dump, and others).
+2. **Browser extensions** — known video-downloader / screen-recorder / stream-capture add-ons installed in Chrome, Edge, Brave, Chromium, Opera, Vivaldi, and Firefox, matched by extension id and by manifest-name keywords.
+3. **Hardware capture devices** — HDMI/USB capture cards (Elgato, AVerMedia, Magewell, Blackmagic/DeckLink, Epiphan, Razer Ripsaw, and others) enumerated from the OS device tree.
 
-- **The agent is running and clean.** The player receives a `200` response with
-  `clean: true` and proceeds with playback.
-- **The agent is running and a recorder is detected.** The player receives
-  `clean: false` and a non-empty `recorders` array, and blocks playback.
-- **The agent is not installed or not running.** The browser's `fetch` fails
-  with a connection-refused error. The player interprets this as "agent
-  missing" and shows an install prompt.
+All signatures live in [`signatures.json`](./signatures.json) and can be extended without touching the code.
 
-Because the player runs from a different origin (the Vite dev server on
-`http://localhost:5173` by default), every response from the agent includes the
-CORS headers required for the browser to read it.
-
-## How to run it
-
-The agent uses only the Python 3 standard library. There are no `pip`
-dependencies and no install step.
+## Running the agent
 
 ```bash
 python3 agent.py
 ```
 
-You should see a startup banner reporting the listening address, the detected
-platform, and the number of recorder signatures that were loaded. Press
-`Ctrl+C` to stop the agent cleanly.
+It prints a startup banner and serves on `http://127.0.0.1:7891`.
 
-## Environment variables
+### Environment variables
 
-| Variable               | Default                  | Description                                                        |
-|------------------------|--------------------------|--------------------------------------------------------------------|
-| `AGENT_HOST`           | `127.0.0.1`              | Interface to bind. Keep this on loopback for safety.               |
-| `AGENT_PORT`           | `7891`                   | TCP port to listen on. Must match what the player expects.         |
-| `AGENT_ALLOWED_ORIGIN` | `http://localhost:5173`  | The browser origin permitted to read responses via CORS.           |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `AGENT_HOST` | `127.0.0.1` | Bind address |
+| `AGENT_PORT` | `7891` | Bind port |
+| `AGENT_ALLOWED_ORIGIN` | `http://localhost:5173` | CORS origin allowed to read `/status` (set to the player's URL) |
 
-Example:
-
-```bash
-AGENT_PORT=7891 AGENT_ALLOWED_ORIGIN=http://localhost:5173 python3 agent.py
-```
-
-## Endpoints
+## API
 
 ### `GET /status`
-
-Returns the agent's view of the machine, including any detected recorders.
 
 ```json
 {
   "installed": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "brand": "ARQX Atlas",
   "platform": "linux",
-  "recorders": ["OBS Studio", "Bandicam"],
+  "recorders": ["OBS Studio"],
+  "downloaders": ["yt-dlp / youtube-dl"],
+  "captureDevices": ["Elgato Cam Link 4K"],
+  "extensions": ["Video DownloadHelper"],
+  "threats": [
+    { "category": "Screen recorder", "name": "OBS Studio" },
+    { "category": "Browser extension", "name": "Video DownloadHelper" }
+  ],
   "clean": false,
-  "checkedAt": "2026-06-04T09:30:00Z"
+  "checkedAt": "2026-06-04T00:00:00Z"
 }
 ```
 
-When no recorder is found, `recorders` is an empty array and `clean` is `true`.
-The `platform` field is normalized to one of `linux`, `darwin`, or `win32`.
+`clean` is `true` only when every category is empty. The player blocks playback whenever `clean` is `false`.
 
 ### `GET /health`
 
-A simple liveness probe.
-
 ```json
-{ "ok": true }
+{ "ok": true, "brand": "ARQX Atlas", "version": "2.0.0" }
 ```
 
-### Other paths
+Every response carries CORS headers and `Cache-Control: no-store`. The agent echoes the request `Origin` only when it matches `AGENT_ALLOWED_ORIGIN`; otherwise it returns the configured default. Unknown paths return `404`, and `OPTIONS` preflight returns `204`.
 
-Any other path returns `404` with `{ "error": "not found" }`. `OPTIONS`
-requests (browser CORS preflight) return `204` with the CORS headers and no
-body.
+## Extending detection
 
-## How `recorders.json` works and how to extend it
+Edit [`signatures.json`](./signatures.json):
 
-The agent loads its detection signatures from `recorders.json`, located in the
-same directory as `agent.py`. The file contains a single `signatures` array.
-Each entry has a human-readable `name` and a `match` array of lowercase
-substrings:
+- `processes` — categorized lists of `{ "name", "match": [...] }`. A process matches when one of its `match` tokens appears in the process name on a word boundary (so "obsidian" does not match the "obs" recorder signature).
+- `captureDeviceKeywords` — substrings matched against enumerated video-device names.
+- `extensions.ids` — a map of browser-extension id → display name (exact-id match).
+- `extensions.keywords` — substrings matched against extension manifest names.
 
-```json
-{
-  "signatures": [
-    { "name": "OBS Studio", "match": ["obs", "obs64", "obs-studio"] },
-    { "name": "Bandicam",   "match": ["bandicam", "bdcam"] }
-  ]
-}
-```
+Restart the agent after editing.
 
-For every running process, the agent normalizes the process name (it strips the
-directory path and any `.exe` suffix and lowercases the result) and checks
-whether any `match` substring appears within it. If a match is found, the
-signature's `name` is added to the reported `recorders` list. The result is
-sorted and de-duplicated, so each recorder appears at most once.
+## Packaging
 
-To add a new recorder, append another entry to the `signatures` array with the
-process-name fragments you expect to see. Matching is case-insensitive and
-substring-based, so short, distinctive fragments work best. If `recorders.json`
-is missing or unreadable, the agent falls back to a small built-in default list
-so that it still runs.
+The agent can be packaged into native installers for distribution. See [`PACKAGING.md`](./PACKAGING.md) for building:
 
-## Platform support
+- **Windows** — `.exe` (PyInstaller) and `.msi` (WiX/Inno Setup)
+- **Linux** — `.deb` (dpkg) and a self-contained `install.sh`
+- **macOS** — `.app` bundle and `.dmg`
 
-The agent enumerates processes using the operating system's native tooling:
+## Scope and limitations
 
-- **Windows** (`platform.system() == "Windows"`): it runs `tasklist` and parses
-  the image names from the CSV output.
-- **macOS and Linux**: it runs `ps -axco comm`, falling back to `ps -eo comm` if
-  the first form is unavailable.
-
-If process enumeration fails for any reason, the agent logs a warning to
-standard error and reports an empty `recorders` list rather than crashing.
-
-## Known limitations
-
-The agent runs with the user's own privileges on the user's own machine, so a
-determined user can stop it, block its port, or rename a recorder's executable
-to evade the signature list. Detection of NVIDIA ShadowPlay in particular is
-best-effort, because its capture is driven by background driver components
-rather than an obviously named recording process. Treat the agent as a measure
-that deters casual capture and raises the overall cost of recording — not as an
-unbreakable control.
+This is a **user-space** agent. It raises the cost of casual capture and leaves forensic traces, but a determined user with administrative/root control can kill or spoof it, and it can detect — but not prevent — a capture in progress. True kernel-level capture prevention (blocking the OS frame buffer / a protected video path) requires a signed kernel driver or hardware DRM (Widevine L1, PlayReady SL3000, Android `FLAG_SECURE`, iOS screen-capture APIs), which is out of scope for this prototype. The agent therefore **blocks playback** rather than terminating user processes; see [`../SECURITY.md`](../SECURITY.md).

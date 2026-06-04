@@ -19,5 +19,10 @@ package-lock.json
 __pycache__/
 *.pyc
 
+# Agent build artifacts
+agent/dist/
+agent/build/
+*.deb
+
 # Env
 .env
