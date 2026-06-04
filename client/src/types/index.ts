@@ -48,9 +48,15 @@ export interface VideoPlayerProps {
 
 export type AgentState = 'clean' | 'threat' | 'not-installed' | 'error' | 'checking';
 
+export interface AgentThreat {
+  /** e.g. "Screen recorder", "Video downloader", "Browser extension", "Capture device". */
+  category: string;
+  name: string;
+}
+
 export interface AgentStatus {
   state: AgentState;
-  recorders: string[];
+  threats: AgentThreat[];
 }
 
 export interface UploadResponse {

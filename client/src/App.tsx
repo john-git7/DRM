@@ -69,8 +69,15 @@ function Header() {
 
 function Footer() {
   return (
-    <footer className="border-t-2 border-white/10 py-5 text-center text-xs text-gray-600 font-mono uppercase tracking-widest">
-      &copy; {new Date().getFullYear()} DRMShield Video Player Prototype — Secured client-side environment
+    <footer className="border-t-2 border-white/10 py-6 flex flex-col items-center gap-2.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">Built by</span>
+        <img src="/arqx-logo.png" alt="ARQX" className="h-4 w-auto" />
+        <span className="text-[11px] text-gray-300 font-mono uppercase tracking-[0.2em] font-black">Atlas</span>
+      </div>
+      <span className="text-[11px] text-gray-600 font-mono uppercase tracking-widest">
+        &copy; {new Date().getFullYear()} DRMShield — Secured client-side environment
+      </span>
     </footer>
   );
 }

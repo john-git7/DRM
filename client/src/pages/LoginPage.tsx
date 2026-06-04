@@ -82,6 +82,12 @@ export default function LoginPage() {
             {loading ? 'Authenticating...' : 'Sign In'}
           </button>
         </form>
+
+        <div className="mt-6 pt-4 border-t-2 border-white/10 flex items-center justify-center gap-2 opacity-80">
+          <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">Built by</span>
+          <img src="/arqx-logo.png" alt="ARQX" className="h-3.5 w-auto" />
+          <span className="text-[10px] text-gray-300 font-mono uppercase tracking-[0.2em] font-black">Atlas</span>
+        </div>
       </div>
     </div>
   );

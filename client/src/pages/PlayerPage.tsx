@@ -23,7 +23,7 @@ export default function PlayerPage() {
 
   const [video, setVideo] = useState<Video | null>(null);
   const [keyGrant, setKeyGrant] = useState<string | null>(null);
-  const [agent, setAgent] = useState<AgentStatus>({ state: 'checking', recorders: [] });
+  const [agent, setAgent] = useState<AgentStatus>({ state: 'checking', threats: [] });
   const [loading, setLoading] = useState(true);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,16 +55,17 @@ export default function PlayerPage() {
 
       const agentStatus = await checkAgent();
       setAgent(agentStatus);
+      const threatLabels = agentStatus.threats.map((t) => `${t.category}: ${t.name}`);
       sendAudit({
         event: 'agent-check',
         videoId: current.filename,
         deviceId,
         agentStatus: agentStatus.state,
-        recorders: agentStatus.recorders,
+        recorders: threatLabels,
       });
 
       if (agentStatus.state !== 'clean') {
-        sendAudit({ event: 'playback-blocked', videoId: current.filename, deviceId, agentStatus: agentStatus.state, recorders: agentStatus.recorders });
+        sendAudit({ event: 'playback-blocked', videoId: current.filename, deviceId, agentStatus: agentStatus.state, recorders: threatLabels });
         return;
       }
 
@@ -137,7 +138,7 @@ export default function PlayerPage() {
       const status = await checkAgent();
       if (status.state !== 'clean') {
         setAgent(status);
-        sendAudit({ event: 'playback-blocked', videoId: filename, deviceId: deviceIdRef.current ?? undefined, agentStatus: status.state, recorders: status.recorders });
+        sendAudit({ event: 'playback-blocked', videoId: filename, deviceId: deviceIdRef.current ?? undefined, agentStatus: status.state, recorders: status.threats.map((t) => `${t.category}: ${t.name}`) });
       }
     }, 20000);
     return () => clearInterval(recheck);
@@ -355,18 +356,28 @@ function AgentBlock({ agent, onRetry }: { agent: AgentStatus; onRetry: () => voi
   const notInstalled = agent.state === 'not-installed';
   const threat = agent.state === 'threat';
   return (
-    <div className="aspect-video w-full bg-black border-2 border-[#ef4444] flex flex-col items-center justify-center text-center px-6" style={{ boxShadow: '6px 6px 0px #ef4444' }}>
+    <div className="aspect-video w-full bg-black border-2 border-[#ef4444] flex flex-col items-center justify-center text-center px-6 overflow-y-auto" style={{ boxShadow: '6px 6px 0px #ef4444' }}>
       {notInstalled ? <Download className="w-12 h-12 text-[#f59e0b] mb-4" /> : <MonitorX className="w-12 h-12 text-[#ef4444] mb-4" />}
       <p className="font-black text-lg uppercase tracking-wide mb-2 text-white">
-        {notInstalled ? 'Security Agent Required' : threat ? 'Screen Recorder Detected' : 'Agent Check Failed'}
+        {notInstalled ? 'Security Agent Required' : threat ? 'Capture Threat Detected' : 'Agent Check Failed'}
       </p>
-      <p className="text-gray-400 text-sm font-mono mb-5 max-w-md">
+      <p className="text-gray-400 text-sm font-mono mb-4 max-w-md">
         {notInstalled
-          ? 'The DRMShield agent must be running on this machine to watch protected content. Start the localhost agent, then retry.'
+          ? 'The ARQX Atlas agent must be running on this machine to watch protected content. Start the localhost agent, then retry.'
           : threat
-            ? `Playback is blocked while a recorder is running: ${agent.recorders.join(', ') || 'unknown recorder'}. Close it and retry.`
+            ? 'Playback is blocked while a capture tool, downloader, or capture device is active. Close or remove it, then retry.'
             : 'The security agent returned an unexpected response. Retry to check again.'}
       </p>
+      {threat && agent.threats.length > 0 && (
+        <ul className="mb-5 text-xs font-mono text-left max-w-md w-full space-y-1">
+          {agent.threats.slice(0, 8).map((t, i) => (
+            <li key={i} className="flex items-center gap-2 bg-[#ef4444]/10 border border-[#ef4444]/40 px-2 py-1">
+              <span className="text-[#ef4444] font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">{t.category}</span>
+              <span className="text-gray-300 truncate">{t.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <button onClick={onRetry} className="brutal-btn">Retry Check</button>
     </div>
   );
@@ -375,7 +386,7 @@ function AgentBlock({ agent, onRetry }: { agent: AgentStatus; onRetry: () => voi
 function AgentBadge({ agent }: { agent: AgentStatus }) {
   switch (agent.state) {
     case 'clean': return <span className="brutal-badge brutal-badge-green">CLEAN</span>;
-    case 'threat': return <span className="brutal-badge brutal-badge-red animate-pulse">RECORDER</span>;
+    case 'threat': return <span className="brutal-badge brutal-badge-red animate-pulse">THREAT</span>;
     case 'not-installed': return <span className="brutal-badge brutal-badge-amber">NOT RUNNING</span>;
     case 'checking': return <span className="brutal-badge brutal-badge-gray">CHECKING</span>;
     default: return <span className="brutal-badge brutal-badge-amber">ERROR</span>;
