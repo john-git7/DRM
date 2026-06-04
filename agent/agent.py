@@ -284,8 +284,11 @@ def detect_active_recording():
 # active the compositor produces a "Stream/Output/Video" node; it does not exist
 # otherwise. So that node's presence = the screen is being captured/streamed right now.
 
-_SHARE_APPS = ("Discord", "WEBRTC", "OBS", "Zoom", "Teams", "Chrome", "Chromium",
-               "Firefox", "Slack", "Skype", "Webex", "Telegram", "AnyDesk", "vlc")
+_SHARE_APPS = ("Discord", "WEBRTC", "OBS", "Streamlabs", "XSplit", "Wirecast", "vMix",
+               "Zoom", "Teams", "Webex", "Skype", "Slack", "Telegram", "GoToMeeting",
+               "Jitsi", "Meet", "Twitch", "StreamYard", "Steam", "Parsec", "Sunshine",
+               "Moonlight", "AnyDesk", "TeamViewer", "RustDesk", "Chrome", "Chromium",
+               "Firefox", "Brave", "Edge", "Opera", "Vivaldi", "vlc")
 
 
 def detect_screen_sharing():

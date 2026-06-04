@@ -393,8 +393,10 @@ func detectActiveRecording() []string {
 // xdg-desktop-portal -> PipeWire and stream over the network. While a cast is active
 // the compositor produces a "Stream/Output/Video" node; otherwise it does not exist.
 
-var shareApps = []string{"Discord", "WEBRTC", "OBS", "Zoom", "Teams", "Chrome", "Chromium",
-	"Firefox", "Slack", "Skype", "Webex", "Telegram", "AnyDesk", "vlc"}
+var shareApps = []string{"Discord", "WEBRTC", "OBS", "Streamlabs", "XSplit", "Wirecast", "vMix",
+	"Zoom", "Teams", "Webex", "Skype", "Slack", "Telegram", "GoToMeeting", "Jitsi", "Meet",
+	"Twitch", "StreamYard", "Steam", "Parsec", "Sunshine", "Moonlight", "AnyDesk", "TeamViewer",
+	"RustDesk", "Chrome", "Chromium", "Firefox", "Brave", "Edge", "Opera", "Vivaldi", "vlc"}
 
 func runPwCmd(name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
