@@ -20,7 +20,13 @@ export const VideoSchema = z.object({
   hlsPlaylist: z
     .string()
     .optional()
-    .describe('Relative URL of the encrypted .m3u8 playlist once ready')
+    .describe('Relative URL of the encrypted .m3u8 playlist once ready'),
+  hlsProgress: z
+    .number()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe('AES-128 HLS transcoding progress (0-100)')
 });
 
 /**

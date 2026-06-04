@@ -11,8 +11,14 @@ const app = express();
 app.use(helmet());
 app.use(globalLimiter);
 
+// Allow any localhost origin (the dev client port varies: 5173/5174/5180…) plus an
+// explicit CLIENT_ORIGIN for non-local deploys. Non-localhost origins are rejected.
+const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    const allowed = !origin || LOCALHOST_ORIGIN.test(origin) || origin === process.env.CLIENT_ORIGIN;
+    callback(null, allowed);
+  },
   credentials: true
 }));
 

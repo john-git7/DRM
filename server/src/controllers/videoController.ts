@@ -99,10 +99,17 @@ export function uploadVideo(
  * Status is tracked on the video record; clients poll GET /api/videos/:filename.
  */
 function startTranscode(id: string, inputPath: string): void {
-  updateVideo(id, { hlsStatus: 'processing' });
-  transcodeToHls(id, inputPath)
+  updateVideo(id, { hlsStatus: 'processing', hlsProgress: 0 });
+  let lastPct = 0;
+  transcodeToHls(id, inputPath, (pct) => {
+    // Persist only when the integer percent advances (bounds videos.json writes).
+    if (pct > lastPct) {
+      lastPct = pct;
+      updateVideo(id, { hlsProgress: pct });
+    }
+  })
     .then(({ relativePlaylistUrl }) => {
-      updateVideo(id, { hlsStatus: 'ready', hlsPlaylist: relativePlaylistUrl });
+      updateVideo(id, { hlsStatus: 'ready', hlsPlaylist: relativePlaylistUrl, hlsProgress: 100 });
       // Content is now AES-128 HLS only — discard the original unencrypted MP4.
       fs.promises.unlink(inputPath).catch(() => { /* already gone */ });
       console.log(`HLS encryption ready for ${id}`);

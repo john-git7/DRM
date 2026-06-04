@@ -32,10 +32,17 @@ export interface HlsResult {
  * key rotation (FFmpeg periodic_rekey) is a future enhancement; keyService's schema
  * already isolates keys per video id so it can be extended without a data migration.
  */
-export async function transcodeToHls(videoId: string, inputPath: string): Promise<HlsResult> {
+export async function transcodeToHls(
+  videoId: string,
+  inputPath: string,
+  onProgress?: (pct: number) => void
+): Promise<HlsResult> {
   const safeId = path.basename(videoId);
   const outDir = path.join(STREAMS_DIR, safeId);
   fs.mkdirSync(outDir, { recursive: true });
+
+  // Total duration (for a % progress estimate). Best-effort: 0 disables progress.
+  const durationSec = await probeDuration(inputPath);
 
   const key = crypto.randomBytes(16);
   const iv = crypto.randomBytes(16);
@@ -69,10 +76,12 @@ export async function transcodeToHls(videoId: string, inputPath: string): Promis
       '-hls_playlist_type', 'vod',
       '-hls_key_info_file', keyInfoPath,
       '-hls_segment_filename', path.join(outDir, 'seg_%03d.ts'),
+      // Machine-readable progress on stdout (out_time_us=…) for the % estimate.
+      '-progress', 'pipe:1', '-nostats',
       playlistPath
     ];
 
-    await runFfmpeg(args);
+    await runFfmpeg(args, durationSec, onProgress);
 
     // Persist the key to the key DB only after a successful transcode.
     storeKey(safeId, { method: 'AES-128', keyHex, ivHex, createdAt: new Date().toISOString() });
@@ -85,21 +94,51 @@ export async function transcodeToHls(videoId: string, inputPath: string): Promis
   }
 }
 
+/** Probe the input's duration in seconds via ffprobe (0 on failure). */
+function probeDuration(inputPath: string): Promise<number> {
+  return new Promise((resolve) => {
+    const proc = spawn('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1', inputPath
+    ]);
+    let out = '';
+    proc.stdout.on('data', (d) => { out += d.toString(); });
+    proc.on('error', () => resolve(0));
+    proc.on('close', () => resolve(parseFloat(out.trim()) || 0));
+  });
+}
+
 /**
  * Run FFmpeg with the given args, resolving on exit code 0 and rejecting otherwise.
- * Captures the tail of stderr to surface useful error context.
+ * Captures the tail of stderr for errors and parses -progress output for a % estimate.
  */
-function runFfmpeg(args: string[]): Promise<void> {
+function runFfmpeg(args: string[], durationSec: number, onProgress?: (pct: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn('ffmpeg', args);
     let stderr = '';
     proc.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
     });
+    if (onProgress && durationSec > 0) {
+      proc.stdout.on('data', (chunk) => {
+        const text: string = chunk.toString();
+        const re = /out_time_us=(\d+)/g;
+        let m: RegExpExecArray | null;
+        let lastUs = -1;
+        while ((m = re.exec(text)) !== null) lastUs = parseInt(m[1], 10);
+        if (lastUs >= 0) {
+          onProgress(Math.min(99, Math.max(0, Math.round((lastUs / 1e6 / durationSec) * 100))));
+        }
+      });
+    }
     proc.on('error', (err) => reject(err));
     proc.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-800)}`));
+      if (code === 0) {
+        if (onProgress) onProgress(100);
+        resolve();
+      } else {
+        reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-800)}`));
+      }
     });
   });
 }
