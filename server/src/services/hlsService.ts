@@ -61,7 +61,7 @@ export async function transcodeToHls(videoId: string, inputPath: string): Promis
     const args = [
       '-y',
       '-i', inputPath,
-      '-c:v', 'libx264', '-profile:v', 'main', '-crf', '21', '-preset', 'veryfast',
+      '-c:v', 'libx264', '-profile:v', 'main', '-crf', '23', '-preset', 'ultrafast',
       '-c:a', 'aac', '-b:a', '128k',
       // Align keyframes to segment boundaries so each 6s segment starts cleanly.
       '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_DURATION})`,

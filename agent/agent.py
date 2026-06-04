@@ -212,46 +212,39 @@ def detect_capture_devices():
     return sorted(set(matched))
 
 
-# --- Active screen-recording detection (compositor-integrated, e.g. GNOME) ---
+# --- Active screen-recording / capture detection (Linux) ---------------------
 #
-# The GNOME/Ubuntu built-in recorder runs *inside* gnome-shell, so there is no
-# distinct process to match. Instead we detect a recording that is actually in
-# progress: a process holding an open file descriptor to a screencast output file
-# (reliable), with a recent-mtime fallback. This catches the OS built-in recorder
-# and anything else writing to the Screencasts folder, but only while it is active.
+# A recorder writes its output to a video file while it captures (a media player
+# only *reads*). We detect any process holding a video file open for WRITING,
+# regardless of the file's name or folder — so OBS, the GNOME built-in
+# (gnome-shell), Kooha, ffmpeg, and a recorder that names files "Video_<time>.mp4"
+# are all caught while active. Our own HLS pipeline (/streams/, /uploads/) is
+# excluded so transcoding never self-triggers.
 
-def _screencast_dirs():
-    home = os.path.expanduser("~")
-    dirs = [os.path.join(home, "Videos", "Screencasts"), os.path.join(home, "Videos")]
+_RECORD_VIDEO_EXTS = (".mp4", ".webm", ".mkv", ".mov", ".flv", ".ogv", ".avi", ".m4v")
+_PIPELINE_MARKERS = (os.sep + "streams" + os.sep, os.sep + "uploads" + os.sep)
+
+
+def _fd_is_writable(pid, fd):
+    """True if the given fd is open for writing (O_WRONLY/O_RDWR), per /proc fdinfo."""
     try:
-        out = subprocess.check_output(["xdg-user-dir", "VIDEOS"], stderr=subprocess.DEVNULL, text=True, timeout=3).strip()
-        if out:
-            dirs.append(out)
-            dirs.append(os.path.join(out, "Screencasts"))
-    except Exception:
+        with open("/proc/%s/fdinfo/%s" % (pid, fd), encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("flags:"):
+                    return (int(line.split()[1], 8) & 3) in (1, 2)
+    except OSError:
         pass
-    seen, result = set(), []
-    for d in dirs:
-        rd = os.path.realpath(d)
-        if rd not in seen and os.path.isdir(rd):
-            seen.add(rd)
-            result.append(rd)
-    return result
+    return False
 
 
-def _looks_like_screencast(name):
-    low = name.lower()
-    return low.startswith("screencast") and low.endswith((".webm", ".mp4", ".mkv", ".ogv"))
-
-
-def _open_fd_holder(dirs):
-    """Process name holding an open screencast file, or None. Linux /proc only."""
-    if not os.path.isdir("/proc"):
-        return None
+def detect_active_recording():
+    """Name a process actively writing a video file (recording), else []. Linux /proc."""
+    if platform.system() != "Linux" or not os.path.isdir("/proc"):
+        return []
     try:
         pids = [p for p in os.listdir("/proc") if p.isdigit()]
     except OSError:
-        return None
+        return []
     for pid in pids:
         fd_dir = "/proc/%s/fd" % pid
         try:
@@ -263,43 +256,18 @@ def _open_fd_holder(dirs):
                 target = os.readlink(os.path.join(fd_dir, fd))
             except OSError:
                 continue
-            base = os.path.basename(target)
-            if _looks_like_screencast(base) and any(target.startswith(d + os.sep) for d in dirs):
-                try:
-                    with open("/proc/%s/comm" % pid, encoding="utf-8") as f:
-                        comm = f.read().strip()
-                except OSError:
-                    comm = "pid " + pid
-                return "%s (%s)" % (comm, base)
-    return None
-
-
-def detect_active_screencast():
-    """Return a one-item list naming an in-progress screen recording, else []."""
-    if platform.system() != "Linux":
-        return []  # macOS/Windows built-ins surface as distinct processes (handled above)
-    dirs = _screencast_dirs()
-    if not dirs:
-        return []
-
-    holder = _open_fd_holder(dirs)
-    if holder:
-        return ["Active screen recording — %s" % holder]
-
-    # Fallback: a screencast file written within the last few seconds.
-    now = time.time()
-    for d in dirs:
-        try:
-            entries = os.listdir(d)
-        except OSError:
-            continue
-        for name in entries:
-            if _looks_like_screencast(name):
-                try:
-                    if now - os.path.getmtime(os.path.join(d, name)) < 8:
-                        return ["Active screen recording — %s" % name]
-                except OSError:
-                    pass
+            if not target.lower().endswith(_RECORD_VIDEO_EXTS):
+                continue
+            if any(m in target for m in _PIPELINE_MARKERS):
+                continue  # our own HLS output / uploads — not a capture
+            if not _fd_is_writable(pid, fd):
+                continue  # a player/reader, not a recorder
+            try:
+                with open("/proc/%s/comm" % pid, encoding="utf-8") as f:
+                    comm = f.read().strip()
+            except OSError:
+                comm = "pid " + pid
+            return ["Active screen recording — %s (%s)" % (comm, os.path.basename(target))]
     return []
 
 
@@ -451,7 +419,7 @@ def _cached_scans():
 def build_status():
     proc_threats = detect_processes()
     capture_devices, extensions = _cached_scans()
-    active_recording = detect_active_screencast()  # fresh each call — must be timely
+    active_recording = detect_active_recording()  # fresh each call — must be timely
 
     recorders = [p["name"] for p in proc_threats if p["category"] != "Video downloader"]
     recorders += active_recording

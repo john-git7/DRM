@@ -303,44 +303,55 @@ func detectCaptureDevices() []string {
 	return dedupSorted(matched)
 }
 
-// --- active screen recording (Linux compositor recorders, e.g. GNOME) --------
+// --- active screen recording / capture detection (Linux) ---------------------
+//
+// A recorder writes its output to a video file while capturing (a player only
+// reads). We flag any process holding a video file open for WRITING, regardless of
+// name or folder — catching OBS, the GNOME built-in (gnome-shell), Kooha, ffmpeg,
+// and recorders that name files "Video_<time>.mp4". Our own HLS pipeline is excluded.
 
-func screencastDirs() []string {
-	home, _ := os.UserHomeDir()
-	cands := []string{filepath.Join(home, "Videos", "Screencasts"), filepath.Join(home, "Videos")}
-	if out, err := runCmd(3, "xdg-user-dir", "VIDEOS"); err == nil {
-		if v := strings.TrimSpace(out); v != "" {
-			cands = append(cands, v, filepath.Join(v, "Screencasts"))
+var recordVideoExts = []string{".mp4", ".webm", ".mkv", ".mov", ".flv", ".ogv", ".avi", ".m4v"}
+
+func hasRecordExt(low string) bool {
+	for _, e := range recordVideoExts {
+		if strings.HasSuffix(low, e) {
+			return true
 		}
 	}
-	seen := map[string]bool{}
-	var dirs []string
-	for _, d := range cands {
-		rd, err := filepath.EvalSymlinks(d)
-		if err != nil {
-			rd = d
-		}
-		if !seen[rd] {
-			if info, err := os.Stat(rd); err == nil && info.IsDir() {
-				seen[rd] = true
-				dirs = append(dirs, rd)
+	return false
+}
+
+func fdIsWritable(pid, fd string) bool {
+	b, err := os.ReadFile("/proc/" + pid + "/fdinfo/" + fd)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(line, "flags:") {
+			fields := strings.Fields(line)
+			if len(fields) < 2 {
+				return false
 			}
+			var v int64
+			for _, c := range fields[1] {
+				if c < '0' || c > '7' {
+					return false
+				}
+				v = v*8 + int64(c-'0')
+			}
+			return (v&3) == 1 || (v&3) == 2 // O_WRONLY or O_RDWR
 		}
 	}
-	return dirs
+	return false
 }
 
-func looksLikeScreencast(name string) bool {
-	low := strings.ToLower(name)
-	return strings.HasPrefix(low, "screencast") &&
-		(strings.HasSuffix(low, ".webm") || strings.HasSuffix(low, ".mp4") ||
-			strings.HasSuffix(low, ".mkv") || strings.HasSuffix(low, ".ogv"))
-}
-
-func openFdHolder(dirs []string) string {
+func detectActiveRecording() []string {
+	if runtime.GOOS != "linux" {
+		return []string{}
+	}
 	procEntries, err := os.ReadDir("/proc")
 	if err != nil {
-		return ""
+		return []string{}
 	}
 	for _, pe := range procEntries {
 		pid := pe.Name()
@@ -357,47 +368,20 @@ func openFdHolder(dirs []string) string {
 			if err != nil {
 				continue
 			}
-			base := filepath.Base(target)
-			if !looksLikeScreencast(base) {
+			if !hasRecordExt(strings.ToLower(target)) {
 				continue
 			}
-			for _, d := range dirs {
-				if strings.HasPrefix(target, d+string(os.PathSeparator)) {
-					comm := "pid " + pid
-					if b, err := os.ReadFile("/proc/" + pid + "/comm"); err == nil {
-						comm = strings.TrimSpace(string(b))
-					}
-					return comm + " (" + base + ")"
-				}
+			if strings.Contains(target, "/streams/") || strings.Contains(target, "/uploads/") {
+				continue // our own HLS output / uploads
 			}
-		}
-	}
-	return ""
-}
-
-func detectActiveScreencast() []string {
-	if runtime.GOOS != "linux" {
-		return []string{}
-	}
-	dirs := screencastDirs()
-	if len(dirs) == 0 {
-		return []string{}
-	}
-	if h := openFdHolder(dirs); h != "" {
-		return []string{"Active screen recording — " + h}
-	}
-	now := time.Now()
-	for _, d := range dirs {
-		entries, err := os.ReadDir(d)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if looksLikeScreencast(e.Name()) {
-				if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) < 8*time.Second {
-					return []string{"Active screen recording — " + e.Name()}
-				}
+			if !fdIsWritable(pid, fd.Name()) {
+				continue // a player/reader, not a recorder
 			}
+			comm := "pid " + pid
+			if b, err := os.ReadFile("/proc/" + pid + "/comm"); err == nil {
+				comm = strings.TrimSpace(string(b))
+			}
+			return []string{"Active screen recording — " + comm + " (" + filepath.Base(target) + ")"}
 		}
 	}
 	return []string{}
@@ -574,7 +558,7 @@ func cachedScans() ([]string, []string) {
 func buildStatus() status {
 	proc := detectProcesses()
 	devices, exts := cachedScans()
-	active := detectActiveScreencast()
+	active := detectActiveRecording()
 
 	recorders := []string{}
 	downloaders := []string{}
