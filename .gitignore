@@ -6,8 +6,9 @@ server/data/keys.json
 server/data/enrollments.json
 server/data/audit-log.json
 
-# Dependencies / build output
+# Dependencies / build output (root dev-runner + workspaces)
 node_modules/
+/node_modules/
 dist/
 # Project standardizes on pnpm; ignore npm lockfiles
 package-lock.json
