@@ -15,7 +15,7 @@ import { getDeviceFingerprint } from '../utils/deviceFingerprint';
 import { checkAgent } from '../utils/agentCheck';
 import { sendAudit } from '../utils/audit';
 import { formatBytes, formatDate } from '../utils/format';
-import type { Video, AgentStatus } from '../types';
+import type { Video, AgentStatus, AgentThreat } from '../types';
 
 export default function PlayerPage() {
   const { filename = '' } = useParams<{ filename: string }>();
@@ -131,7 +131,8 @@ export default function PlayerPage() {
     return () => clearInterval(poll);
   }, [video, filename, preparePlayback]);
 
-  // Re-check the agent mid-session; a recorder launched after start blocks playback.
+  // Re-check the agent mid-session every 2.5s so a recorder launched after playback
+  // starts triggers an near-instant blackout (the recorder then captures only black).
   useEffect(() => {
     if (agent.state !== 'clean') return;
     const recheck = setInterval(async () => {
@@ -140,7 +141,7 @@ export default function PlayerPage() {
         setAgent(status);
         sendAudit({ event: 'playback-blocked', videoId: filename, deviceId: deviceIdRef.current ?? undefined, agentStatus: status.state, recorders: status.threats.map((t) => `${t.category}: ${t.name}`) });
       }
-    }, 20000);
+    }, 2500);
     return () => clearInterval(recheck);
   }, [agent.state, filename]);
 
@@ -157,6 +158,12 @@ export default function PlayerPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      {/* Full-screen blackout the instant a recorder/capture threat is detected:
+          a screen recording of the page now captures only black + the viewer's identity. */}
+      {agent.state === 'threat' && (
+        <CaptureBlackout identity={username ?? 'Authenticated User'} threats={agent.threats} onRetry={retry} />
+      )}
+
       <div className="mb-6">
         <Link to="/" className="brutal-btn-ghost text-sm inline-flex items-center gap-2">
           <ArrowLeft className="w-4 h-4" />
@@ -348,6 +355,39 @@ function VideoStatusCard({ status }: { status?: string }) {
         {failed ? 'This video could not be transcoded into a secure stream.' : 'This video is being split into AES-128 encrypted segments. This page will continue automatically.'}
       </p>
       <Link to="/" className="brutal-btn-ghost">Return to Library</Link>
+    </div>
+  );
+}
+
+function CaptureBlackout({ identity, threats, onRetry }: { identity: string; threats: AgentThreat[]; onRetry: () => void }) {
+  const [pos, setPos] = useState({ top: '38%', left: '30%' });
+  const [stamp, setStamp] = useState(() => new Date().toLocaleString());
+  useEffect(() => {
+    const move = setInterval(() => setPos({ top: `${Math.floor(Math.random() * 70) + 10}%`, left: `${Math.floor(Math.random() * 60) + 10}%` }), 1500);
+    const clock = setInterval(() => setStamp(new Date().toLocaleString()), 1000);
+    return () => { clearInterval(move); clearInterval(clock); };
+  }, []);
+  return (
+    <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-center px-6 select-none">
+      <div style={{ top: pos.top, left: pos.left, transition: 'all 1s ease-in-out' }} className="absolute text-white/30 text-xs font-mono pointer-events-none whitespace-nowrap uppercase tracking-wider">
+        {identity} · {stamp}
+      </div>
+      <MonitorX className="w-16 h-16 text-[#ef4444] mb-5" />
+      <h1 className="text-2xl font-black text-white uppercase tracking-widest mb-2">Screen Capture Blocked</h1>
+      <p className="text-gray-400 text-sm font-mono max-w-md mb-5">
+        A capture tool or recorder was detected. Playback is blacked out, and this session is logged to <span className="text-gray-200">{identity}</span>.
+      </p>
+      {threats.length > 0 && (
+        <ul className="mb-6 text-xs font-mono text-left max-w-md w-full space-y-1">
+          {threats.slice(0, 8).map((t, i) => (
+            <li key={i} className="flex items-center gap-2 border border-[#ef4444]/40 px-2 py-1">
+              <span className="text-[#ef4444] font-bold uppercase text-[10px] tracking-wider whitespace-nowrap">{t.category}</span>
+              <span className="text-gray-300 truncate">{t.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button onClick={onRetry} className="brutal-btn">Close it &amp; Resume</button>
     </div>
   );
 }
