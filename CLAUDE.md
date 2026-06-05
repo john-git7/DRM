@@ -49,6 +49,8 @@ client/src/
     deviceFingerprint.ts               # Stable SHA-256 device fingerprint (binds key grants)
     agentCheck.ts                      # Polls localhost agent :7891 → clean/threat/not-installed
     audit.ts                           # Fire-and-forget POST /api/audit session events
+    forensic.ts                        # ForensicData shape returned by the decrypt endpoint
+    forensicDecode.ts                  # ZXing QR decode from a captured frame → encrypted token text
   context/
     AuthContext.tsx                    # AuthProvider — token + username state, login(), logout()
   hooks/
@@ -56,7 +58,7 @@ client/src/
     useDevTools.ts                     # DevTools detection → full app unmount
     useKeyboardProtection.ts           # Blocks F12, PrintScreen, Ctrl+Shift+I, etc.
   components/
-    VideoPlayer.tsx                    # HLS.js player — grant-bound key loading, hardening, watermarks
+    VideoPlayer.tsx                    # HLS.js player — grant-bound key loading, hardening, encrypted forensic QR
     ToggleSwitch.tsx                   # Reusable toggle
     ProtectedRoute.tsx                 # Redirects unauthenticated users to /login
   pages/
@@ -64,6 +66,7 @@ client/src/
     LibraryPage.tsx                    # Video grid
     UploadPage.tsx                     # Drag-drop upload with progress bar
     PlayerPage.tsx                     # Grant + agent gate, audit, player + Security Monitor panel
+    ScannerPage.tsx                    # Forensic Scanner — read on-frame QR, decrypt via server, show the trace
 
 server/src/
   app.ts                               # Express setup — helmet, CORS, parsers, routes, error handler
@@ -83,6 +86,7 @@ server/src/
     keyGrantService.ts                 # 30s HMAC key grants (video+IP+device); issue/verify
     enrollmentService.ts               # isEnrolled() against data/enrollments.json
     auditService.ts                    # appendAudit() → data/audit-log.json (append-only)
+    forensicService.ts                 # AES-256-GCM encrypt/decrypt of forensic tokens (key derived from STREAM_SECRET)
   middleware/
     errorHandler.ts                    # AppError class + typed global error handler
     auth.ts                            # requireAuth — validates Bearer JWT, attaches req.user
@@ -92,6 +96,7 @@ server/src/
     authController.ts                  # login() handler — delegates to authService
     hlsController.ts                   # Serve playlist/segments; issueKeyGrant + grant-gated key
     auditController.ts                 # recordAudit() — POST /api/audit
+    forensicController.ts              # issueForensicToken + decodeForensicToken (encrypted forensic QR)
   routes/
     videoRoutes.ts                     # Video + HLS + audit routes with auth/limiter guards
     authRoutes.ts                      # POST /api/auth/login with loginLimiter
@@ -119,10 +124,10 @@ streams/<videoId>/                     # Encrypted HLS: index.m3u8 + seg_NNN.ts 
 - **Player hardening (Phase 4)**: HLS.js player with `controlsList=nodownload`, `disablePictureInPicture`/`disableRemotePlayback`, no native controls. DevTools detection tears down the video source; playback pauses on `blur` and `visibilitychange`.
 - **DevTools detection**: dimension diff OR debugger timing trap. Disabled on mobile. The client ESLint config sets `'no-new-func': 'off'` intentionally — `useDevTools.ts` relies on the `Function`/`debugger` timing trap; do not "fix" this rule.
 - **Upload**: MP4 only (extension + magic-byte check), 100MB limit. Non-MP4 files deleted + 415 returned.
-- **Watermark + forensics (Phase 6)**: moving visible watermark shows the authenticated identity + date + live clock, repositioning every 5s; a faint per-user forensic overlay is tiled across the frame.
-- **Audit log (Phase 6)**: `POST /api/audit` (JWT) records session events (agent-check, playback-start/blocked, watch-time heartbeats, devtools-lockout); server stamps username, IP, timestamp.
+- **Forensic watermark + scanner (Phase 6)**: a small, faint QR appears on the frame at a random position roughly once every five minutes for a few seconds. It carries an opaque AES-256-GCM token minted by `POST /api/forensic/token`, which the server stamps with the viewer identity (from the JWT), the device fingerprint, the caller's IP, and the mint time. A generic phone scanner only sees ciphertext; the in-app Forensic Scanner (`/scanner`) reads the QR with ZXing and resolves it through `POST /api/forensic/decode`, which decrypts and returns the fields — so only an authenticated DRMShield operator can trace a leak. The forensic-mark technique was chosen over a 1-D barcode because a QR self-localizes and binarizes locally, so it scans reliably anywhere over arbitrary video content. (Earlier visible/moving watermark and tab-switch capture warnings were removed.)
+- **Audit log (Phase 6)**: `POST /api/audit` (JWT) records session events (agent-check, playback-start/blocked, watch-time heartbeats, devtools-lockout); `forensic-scan` events are appended whenever a token is decrypted via `/api/forensic/decode`. The server stamps username, IP, and timestamp.
 - **Focus loss**: pauses video + overwrites clipboard + shows resume overlay.
-- **Security Monitor toggles** (PlayerPage): control VideoPlayer props — keyboard, right-click, focus loss, watermark, forensic watermark, capture warning. VideoPlayer is sole enforcer; AppShell does not duplicate these.
+- **Security Monitor toggles** (PlayerPage): control VideoPlayer props — keyboard, right-click, focus loss, and the forensic QR. VideoPlayer is sole enforcer; AppShell does not duplicate these.
 
 ## API Endpoints
 
@@ -137,6 +142,8 @@ streams/<videoId>/                     # Encrypted HLS: index.m3u8 + seg_NNN.ts 
 | POST | `/api/hls/:videoId/key-grant` | JWT | Mint a 30s key grant (`{ deviceId }`) after enrollment/device checks |
 | GET | `/api/hls/:videoId/key` | Key grant + `X-Device-Id` | Release AES-128 key (`?grant=` or `X-Key-Grant`) |
 | POST | `/api/audit` | JWT | Record a session audit event (`{ event, ... }`) |
+| POST | `/api/forensic/token` | JWT | Mint an encrypted forensic token (`{ deviceId }`) for the on-frame QR |
+| POST | `/api/forensic/decode` | JWT | Decrypt a scanned token (`{ token }`) → `{ identity, deviceId, ip, issuedAt }` |
 | GET | `/health` | None | Server health check |
 
 The agent exposes a separate API on `:7891`: `GET /status` (recorder report) and `GET /health`.

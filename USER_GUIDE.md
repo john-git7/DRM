@@ -1,6 +1,6 @@
 # DRMShield User Guide
 
-This guide explains how to set up, run, and use DRMShield — a secure video player that encrypts content, gates playback behind authentication and a recorder-detection agent, and watermarks every session.
+This guide explains how to set up, run, and use DRMShield — a secure video player that encrypts content, gates playback behind authentication and a recorder-detection agent, and stamps every session with an encrypted forensic QR that only its own scanner can read.
 
 ## Contents
 
@@ -122,8 +122,7 @@ See [`agent/README.md`](./agent/README.md) for full details and configuration op
 | Recorder agent | "Screen Recorder Detected" / "Security Agent Required" block | Stops playback while a recorder runs |
 | DevTools detection | Black/torn-down player when DevTools open | Prevents frame inspection |
 | Focus / tab pause | Playback pauses when you switch windows or tabs | Deters off-screen capture |
-| Moving watermark | Your identity + time, repositioning every 5s | Burns identity into any recording |
-| Forensic watermark | A faint pattern across the frame | Traces a leak back to a user even if cropped |
+| Forensic QR | A small, faint QR appears at a random spot for a few seconds roughly every five minutes | Embeds an encrypted trace (identity, device, IP, time) that the Forensic Scanner can recover from a leaked frame |
 | No download / no PiP | Download and Picture-in-Picture options are absent | Removes easy export paths |
 
 You can toggle several of these from the **Security Monitor** panel during playback to see their effect.
@@ -148,7 +147,11 @@ Edit the file and the change takes effect on the next key-grant request (no rest
 
 ## 8. Reading the audit log
 
-Every session writes records to `server/data/audit-log.json`. Each entry includes the timestamp, username, IP, device fingerprint, event type, and (where relevant) the recorder-agent status and watch time. Event types include `key-grant-issued`, `agent-check`, `playback-start`, `playback-blocked`, `watch-heartbeat`, and `devtools-lockout`. Use this log to see who watched what, from where, and under what conditions — and as the starting point for tracing a leak alongside the forensic watermark.
+Every session writes records to `server/data/audit-log.json`. Each entry includes the timestamp, username, IP, device fingerprint, event type, and (where relevant) the recorder-agent status and watch time. Event types include `key-grant-issued`, `agent-check`, `playback-start`, `playback-blocked`, `watch-heartbeat`, `devtools-lockout`, and `forensic-scan` (logged whenever an operator decrypts a captured QR token). Use this log to see who watched what, from where, and under what conditions — and as the starting point for tracing a leak alongside the forensic QR.
+
+## 8a. Tracing a leak with the Forensic Scanner
+
+If a frame leaks (for example, a screenshot or a photo of the screen), open **Scanner** from the top navigation. Drop in the captured image; the scanner locates the QR, reads its encrypted token, and — because you are signed in — decrypts it server-side to reveal the viewer's identity, device fingerprint, IP address, and the time the mark was issued. A generic phone QR app cannot do this: it only sees the opaque encrypted token. The QR is intentionally small, faint, and infrequent, so capturing one while it is visible is a matter of timing.
 
 ---
 
