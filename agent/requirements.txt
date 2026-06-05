@@ -1,0 +1,4 @@
+# Dependencies for the cross-platform system-tray icon (tray.py).
+# The headless detector (agent.py) needs NONE of these — it is stdlib-only.
+pystray>=0.19
+pillow>=9.0
