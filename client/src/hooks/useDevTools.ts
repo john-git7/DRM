@@ -44,7 +44,6 @@ export function useDevTools(): DevToolsStatus {
       // Timing trap: open DevTools pauses the debugger statement, making elapsed > 100ms
       let debuggerTriggered = false;
       const start = performance.now();
-      // eslint-disable-next-line no-new-func
       new Function('debugger')();
       if (performance.now() - start > 100) {
         debuggerTriggered = true;
