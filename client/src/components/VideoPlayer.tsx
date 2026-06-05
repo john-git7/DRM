@@ -11,26 +11,30 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useKeyboardProtection } from '../hooks/useKeyboardProtection';
+import apiClient from '../utils/apiClient';
 import type { VideoPlayerProps } from '../types';
 
-interface WatermarkPos {
-  top: string;
-  left: string;
-}
+/**
+ * Forensic mark tuning. A small, faint QR (identity + time) appears once every
+ * ~5 minutes at a random spot for a few seconds, then hides — deliberately low
+ * attention. A QR self-localises and is binarised locally, so even faint it scans
+ * reliably anywhere over any video content (~0.3 opacity is the decode floor).
+ */
+const BARCODE_OPACITY = 0.35;             // faint — low attention, still scannable
+const BARCODE_PX = 130;                   // on-screen QR size (encrypted token needs more modules)
+const BARCODE_SHOW_MS = [2500, 4000];     // visible duration range (~2.5–4s)
+const BARCODE_GAP_MS = [300000, 300000];  // ~5 minutes between appearances
 
 export default function VideoPlayer({
   hlsUrl,
   keyGrant,
   deviceId,
   title,
-  watermarkLabel = 'Demo User',
   devToolsOpen = false,
   onWatchTimeTick,
   focusLossDetectEnabled = true,
   rightClickProtectEnabled = true,
   keyboardProtectEnabled = true,
-  watermarkEnabled = true,
-  screenRecordWarningEnabled = true,
   forensicWatermarkEnabled = true,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -44,18 +48,14 @@ export default function VideoPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [windowFocused, setWindowFocused] = useState(true);
-  const [showCaptureWarning, setShowCaptureWarning] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [watermarkPos, setWatermarkPos] = useState<WatermarkPos>({ top: '15%', left: '15%' });
-  const [watermarkTime, setWatermarkTime] = useState(() => new Date().toLocaleTimeString());
 
-  // Forensic QR: flashes at random positions/intervals, each encoding the viewer's
-  // identity + device + the exact time, so any captured frame decodes back to them.
-  const [qrSrc, setQrSrc] = useState<string | null>(null);
-  const [qrVisible, setQrVisible] = useState(false);
-  const [qrPos, setQrPos] = useState<WatermarkPos>({ top: '40%', left: '40%' });
-
-  const tabSwitchCount = useRef(0);
+  // Forensic mark — a small QR (identity + time) that flashes intermittently at a
+  // random spot; built + scheduled below.
+  const [barcodeSrc, setBarcodeSrc] = useState<string | null>(null);
+  const [barVisible, setBarVisible] = useState(false);
+  const [barTop, setBarTop] = useState(10);
+  const [barLeft, setBarLeft] = useState(10);
 
   useKeyboardProtection(undefined, keyboardProtectEnabled);
 
@@ -110,55 +110,39 @@ export default function VideoPlayer({
     }
   }, [devToolsOpen]);
 
-  // Moving watermark — repositions every 5s, live clock every 1s (Phase 6).
-  useEffect(() => {
-    const timeInterval = setInterval(() => {
-      setWatermarkTime(new Date().toLocaleTimeString());
-    }, 1000);
-    const positionInterval = setInterval(() => {
-      setWatermarkPos({
-        top: `${Math.floor(Math.random() * 65) + 10}%`,
-        left: `${Math.floor(Math.random() * 65) + 10}%`,
-      });
-    }, 5000);
-    return () => { clearInterval(timeInterval); clearInterval(positionInterval); };
-  }, []);
-
-  // Forensic QR pop-up — appears briefly at a random spot on a random interval.
-  // Intermittent + unpredictable defeats motion-tracking removal in video editors,
-  // and every flash encodes identity + device + timestamp for leak attribution.
+  // Forensic barcode scheduler — build the barcode, flash it on a random border
+  // for a short while, hide, repeat. All setState calls live inside timers, never
+  // synchronously in the effect body. When disabled, the overlay JSX is gated off.
   useEffect(() => {
     if (!forensicWatermarkEnabled || devToolsOpen) return;
-    let showTimer = 0;
-    let hideTimer = 0;
-    let cancelled = false;
-
+    let showT = 0, hideT = 0, cancelled = false;
+    const rand = ([a, b]: number[]) => a + Math.random() * (b - a);
     const schedule = () => {
-      const delay = 3500 + Math.random() * 6500; // every ~3.5–10s
-      showTimer = window.setTimeout(async () => {
+      showT = window.setTimeout(async () => {
         if (cancelled) return;
-        const payload = `DRMSHIELD|${watermarkLabel}|${deviceId}|${new Date().toISOString()}`;
         try {
-          const url = await QRCode.toDataURL(payload, { margin: 1, width: 132, errorCorrectionLevel: 'Q' });
+          // Server mints the encrypted token (stamps IP + time, embeds device).
+          const { data } = await apiClient.post<{ token: string }>('/forensic/token', { deviceId });
           if (cancelled) return;
-          setQrSrc(url);
-          setQrPos({ top: `${Math.floor(Math.random() * 72) + 6}%`, left: `${Math.floor(Math.random() * 72) + 6}%` });
-          setQrVisible(true);
-          const duration = 650 + Math.random() * 900; // visible 0.65–1.55s
-          hideTimer = window.setTimeout(() => {
+          const url = await QRCode.toDataURL(data.token, { margin: 4, width: 220, errorCorrectionLevel: 'L' });
+          if (cancelled) return;
+          setBarcodeSrc(url);
+          setBarTop(Math.floor(Math.random() * 64) + 8);   // 8–72%
+          setBarLeft(Math.floor(Math.random() * 64) + 8);  // 8–72%
+          setBarVisible(true);
+          hideT = window.setTimeout(() => {
             if (cancelled) return;
-            setQrVisible(false);
+            setBarVisible(false);
             schedule();
-          }, duration);
+          }, rand(BARCODE_SHOW_MS));
         } catch {
-          schedule();
+          if (!cancelled) schedule();
         }
-      }, delay);
+      }, rand(BARCODE_GAP_MS));
     };
     schedule();
-
-    return () => { cancelled = true; clearTimeout(showTimer); clearTimeout(hideTimer); setQrVisible(false); };
-  }, [forensicWatermarkEnabled, devToolsOpen, watermarkLabel, deviceId]);
+    return () => { cancelled = true; clearTimeout(showT); clearTimeout(hideT); };
+  }, [forensicWatermarkEnabled, devToolsOpen, deviceId]);
 
   // Watch-time heartbeat for audit logging (Phase 6).
   useEffect(() => {
@@ -175,10 +159,6 @@ export default function VideoPlayer({
       if (!focusLossDetectEnabled) return;
       setWindowFocused(false);
       navigator.clipboard?.writeText('PROTECTED SECURE CONTENT - SCREENSHOT INTERCEPTED').catch(() => { });
-      if (screenRecordWarningEnabled) {
-        tabSwitchCount.current += 1;
-        if (tabSwitchCount.current >= 3) setShowCaptureWarning(true);
-      }
       if (videoRef.current && !videoRef.current.paused) {
         videoRef.current.pause();
         setIsPlaying(false);
@@ -195,7 +175,7 @@ export default function VideoPlayer({
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [focusLossDetectEnabled, screenRecordWarningEnabled]);
+  }, [focusLossDetectEnabled]);
 
   useEffect(() => {
     const handleRightClick = (e: MouseEvent) => { if (rightClickProtectEnabled) e.preventDefault(); };
@@ -204,7 +184,9 @@ export default function VideoPlayer({
   }, [rightClickProtectEnabled]);
 
   useEffect(() => {
-    if (!isPlaying) { setShowControls(true); return; }
+    // Auto-hide only while playing; when paused the controls stay pinned via the
+    // `!isPlaying` term on the controls bar below — no setState needed here.
+    if (!isPlaying) return;
     const timer = setTimeout(() => setShowControls(false), 3000);
     return () => clearTimeout(timer);
   }, [showControls, isPlaying]);
@@ -285,15 +267,16 @@ export default function VideoPlayer({
         onContextMenu={(e) => e.preventDefault()}
       />
 
-      {/* Forensic QR — intermittent, random position, encodes identity for leak tracing */}
-      {forensicWatermarkEnabled && qrVisible && qrSrc && !isFocusLost && !devToolsOpen && (
+      {/* Forensic mark — a small QR that flashes briefly at a random spot; encodes
+          identity + time for leak tracing, scannable anywhere by the /scanner tool. */}
+      {forensicWatermarkEnabled && barVisible && barcodeSrc && !isFocusLost && !devToolsOpen && (
         <img
-          src={qrSrc}
+          src={barcodeSrc}
           alt=""
           aria-hidden
           draggable={false}
-          style={{ top: qrPos.top, left: qrPos.left, opacity: 0.6 }}
-          className="absolute w-[84px] h-[84px] z-20 pointer-events-none select-none rounded-sm"
+          style={{ top: `${barTop}%`, left: `${barLeft}%`, width: `${BARCODE_PX}px`, height: `${BARCODE_PX}px`, opacity: BARCODE_OPACITY }}
+          className="absolute z-20 pointer-events-none select-none"
         />
       )}
 
@@ -303,16 +286,6 @@ export default function VideoPlayer({
         onClick={togglePlay}
         onContextMenu={(e) => e.preventDefault()}
       />
-
-      {/* Moving visible watermark */}
-      {watermarkEnabled && (
-        <div
-          style={{ top: watermarkPos.top, left: watermarkPos.left, transition: 'all 1s ease-in-out' }}
-          className="absolute pointer-events-none text-white/25 text-xs font-bold select-none font-mono py-1 px-2 border border-white/20 bg-black/30 tracking-wider z-20 whitespace-nowrap animate-watermark uppercase"
-        >
-          {watermarkLabel} | {new Date().toLocaleDateString()} | {watermarkTime}
-        </div>
-      )}
 
       {/* Load error overlay */}
       {loadError && !devToolsOpen && (
@@ -351,28 +324,9 @@ export default function VideoPlayer({
         </div>
       )}
 
-      {/* Capture warning */}
-      {showCaptureWarning && screenRecordWarningEnabled && (
-        <div className="absolute bottom-16 right-3 z-40">
-          <div
-            className="flex items-center gap-2 bg-[#f59e0b] text-black font-bold text-xs py-1.5 px-3 border-2 border-black uppercase tracking-wide"
-            style={{ boxShadow: '3px 3px 0px #000' }}
-          >
-            <AlertTriangle className="w-4 h-4" />
-            <span>Capture Detected</span>
-            <button
-              onClick={() => { setShowCaptureWarning(false); tabSwitchCount.current = 0; }}
-              className="ml-2 hover:opacity-70 transition-opacity font-black"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Controls bar */}
       <div
-        className={`absolute inset-x-0 bottom-0 bg-[#111111] border-t-2 border-white/20 p-3 z-30 transition-all duration-200 flex flex-col gap-2 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+        className={`absolute inset-x-0 bottom-0 bg-[#111111] border-t-2 border-white/20 p-3 z-30 transition-all duration-200 flex flex-col gap-2 ${showControls || !isPlaying ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
           }`}
       >
         <input

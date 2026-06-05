@@ -14,6 +14,7 @@ import {
   issueKeyGrant,
 } from '../controllers/hlsController';
 import { recordAudit } from '../controllers/auditController';
+import { issueForensicToken, decodeForensicToken } from '../controllers/forensicController';
 import { requireAuth } from '../middleware/auth';
 import { tokenLimiter, keyLimiter, auditLimiter } from '../middleware/rateLimiter';
 
@@ -49,5 +50,11 @@ router.get('/hls/:videoId/:segment', serveHlsSegment);
 
 // POST /api/audit — record a session audit event (Phase 6)
 router.post('/audit', requireAuth, auditLimiter, recordAudit);
+
+// --- Encrypted forensic watermark tokens (Phase 6) ---
+// POST /api/forensic/token — mint an encrypted token (identity+device+IP+time) for the QR.
+router.post('/forensic/token', requireAuth, tokenLimiter, issueForensicToken);
+// POST /api/forensic/decode — decrypt a scanned token; auth-gated so only our scanner can read it.
+router.post('/forensic/decode', requireAuth, auditLimiter, decodeForensicToken);
 
 export default router;
