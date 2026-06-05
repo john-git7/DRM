@@ -1,0 +1,35 @@
+; ARQX Atlas Agent — Inno Setup script (optional, for a real setup.exe).
+; build_bundles.sh renders @VERSION@ and drops this into the bundle as installer.iss.
+; On Windows with Inno Setup installed:  iscc installer.iss  (run from the bundle folder).
+; Per-user install (no admin), autostarts at login via the silent VBS launcher.
+
+[Setup]
+AppName=ARQX Atlas Agent
+AppVersion=@VERSION@
+AppPublisher=ARQX Atlas
+DefaultDirName={localappdata}\ARQX Atlas Agent
+DisableProgramGroupPage=yes
+PrivilegesRequired=lowest
+UninstallDisplayName=ARQX Atlas Agent
+OutputDir=.
+OutputBaseFilename=arqx-atlas-agent-@VERSION@-setup
+Compression=lzma2
+SolidCompression=yes
+
+[Files]
+Source: "python\*"; DestDir: "{app}\python"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "app\*"; DestDir: "{app}\app"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "launch-tray.vbs"; DestDir: "{app}"; Flags: ignoreversion
+Source: "run-agent.bat"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+; Start at login (current user).
+Name: "{userstartup}\ARQX Atlas Agent"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-tray.vbs"""; WorkingDir: "{app}"
+
+[Run]
+; Launch immediately after install, hidden.
+Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-tray.vbs"""; WorkingDir: "{app}"; Flags: nowait runhidden
+
+[UninstallRun]
+; Stop the tray on uninstall.
+Filename: "{sys}\taskkill.exe"; Parameters: "/f /im pythonw.exe"; Flags: runhidden; RunOnceId: "StopAgent"

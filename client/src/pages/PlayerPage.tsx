@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import apiClient from '../utils/apiClient';
 import {
-  ArrowLeft, ShieldAlert, Sparkles, AlertCircle, Loader2, MonitorCheck, MonitorX, Download,
+  ArrowLeft, ShieldAlert, AlertCircle, Loader2, MonitorCheck, MonitorX, Download,
   Cpu, Eye, Lock, FileText, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
@@ -31,8 +31,6 @@ export default function PlayerPage() {
   const [focusLossDetectEnabled, setFocusLossDetectEnabled] = useState(true);
   const [rightClickProtectEnabled, setRightClickProtectEnabled] = useState(true);
   const [keyboardProtectEnabled, setKeyboardProtectEnabled] = useState(true);
-  const [watermarkEnabled, setWatermarkEnabled] = useState(true);
-  const [screenRecordWarningEnabled, setScreenRecordWarningEnabled] = useState(true);
   const [forensicWatermarkEnabled, setForensicWatermarkEnabled] = useState(true);
   const [devToolsDetectEnabled, setDevToolsDetectEnabled] = useState(true);
 
@@ -224,14 +222,11 @@ export default function PlayerPage() {
                 keyGrant={keyGrant!}
                 deviceId={deviceId}
                 title={video.title}
-                watermarkLabel={username ?? 'Authenticated User'}
                 devToolsOpen={devToolsOpen}
                 onWatchTimeTick={(sec) => sendAudit({ event: 'watch-heartbeat', videoId: video.filename, deviceId: deviceIdRef.current ?? undefined, watchTimeSec: sec })}
                 focusLossDetectEnabled={focusLossDetectEnabled}
                 rightClickProtectEnabled={rightClickProtectEnabled}
                 keyboardProtectEnabled={keyboardProtectEnabled}
-                watermarkEnabled={watermarkEnabled}
-                screenRecordWarningEnabled={screenRecordWarningEnabled}
                 forensicWatermarkEnabled={forensicWatermarkEnabled}
               />
             ) : (
@@ -304,27 +299,12 @@ export default function PlayerPage() {
                   onChange={setFocusLossDetectEnabled}
                 />
                 <SecurityRow
-                  icon={<Sparkles className="w-4 h-4" />}
-                  label="Floating Watermark"
-                  badge={<span className={`brutal-badge ${watermarkEnabled ? 'brutal-badge-violet animate-pulse' : 'brutal-badge-gray'}`}>{watermarkEnabled ? 'MOVING' : 'OFF'}</span>}
-                  checked={watermarkEnabled}
-                  onChange={setWatermarkEnabled}
-                />
-                <SecurityRow
                   icon={<FileText className="w-4 h-4" />}
-                  label="Forensic QR"
-                  badge={<span className={`brutal-badge ${forensicWatermarkEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>{forensicWatermarkEnabled ? 'FLASHING' : 'OFF'}</span>}
+                  label="Forensic Mark"
+                  badge={<span className={`brutal-badge ${forensicWatermarkEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>{forensicWatermarkEnabled ? 'EMBEDDED' : 'OFF'}</span>}
                   checked={forensicWatermarkEnabled}
                   onChange={setForensicWatermarkEnabled}
                 />
-                <SecurityRow
-                  icon={<AlertCircle className="w-4 h-4" />}
-                  label="Capture Warning"
-                  badge={<span className={`brutal-badge ${screenRecordWarningEnabled ? 'brutal-badge-violet' : 'brutal-badge-gray'}`}>{screenRecordWarningEnabled ? 'ACTIVE' : 'OFF'}</span>}
-                  checked={screenRecordWarningEnabled}
-                  onChange={setScreenRecordWarningEnabled}
-                />
-
                 <div className="flex items-center justify-between py-2.5 border-t-2 border-white/5">
                   <div className="flex items-center gap-2 text-gray-500">
                     <Lock className="w-4 h-4" />

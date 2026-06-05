@@ -32,8 +32,6 @@ export interface VideoPlayerProps {
   /** Device fingerprint sent with the key request; must match the grant. */
   deviceId: string;
   title: string;
-  /** Identity shown in the moving watermark (user email/username). */
-  watermarkLabel?: string;
   /** When true, the player tears down the video source (DevTools open). */
   devToolsOpen?: boolean;
   /** Called with elapsed watch-time seconds for audit heartbeats. */
@@ -41,8 +39,6 @@ export interface VideoPlayerProps {
   focusLossDetectEnabled?: boolean;
   rightClickProtectEnabled?: boolean;
   keyboardProtectEnabled?: boolean;
-  watermarkEnabled?: boolean;
-  screenRecordWarningEnabled?: boolean;
   /** Faint per-user forensic overlay encoding identity across the frame. */
   forensicWatermarkEnabled?: boolean;
 }

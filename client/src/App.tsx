@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { ShieldCheck, Film, Upload, AlertTriangle, LogOut } from 'lucide-react';
+import { ShieldCheck, Film, Upload, ScanLine, AlertTriangle, LogOut } from 'lucide-react';
 import LibraryPage from './pages/LibraryPage';
 import UploadPage from './pages/UploadPage';
 import PlayerPage from './pages/PlayerPage';
+import ScannerPage from './pages/ScannerPage';
 import LoginPage from './pages/LoginPage';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -51,6 +52,17 @@ function Header() {
             >
               <Upload className="w-4 h-4" />
               Upload
+            </Link>
+            <Link
+              to="/scanner"
+              className={`flex items-center gap-1.5 text-xs md:text-sm font-bold uppercase tracking-wide px-3 py-1.5 border-2 transition-all duration-75 ${
+                isActive('/scanner')
+                  ? 'bg-[#7c3aed] border-white text-white'
+                  : 'bg-transparent border-transparent text-gray-400 hover:border-white/40 hover:text-white'
+              }`}
+            >
+              <ScanLine className="w-4 h-4" />
+              Scanner
             </Link>
             <button
               onClick={logout}
@@ -119,6 +131,7 @@ function AppShell() {
             <Route path="/" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
             <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
             <Route path="/player/:filename" element={<ProtectedRoute><PlayerPage /></ProtectedRoute>} />
+            <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
             <Route path="*" element={
               <div className="text-center py-24">
                 <div className="inline-block brutal-card p-10 max-w-md">

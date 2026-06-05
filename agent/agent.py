@@ -49,6 +49,7 @@ import json
 import os
 import platform
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -253,9 +254,93 @@ def _fd_is_writable(pid, fd):
 
 
 def detect_active_recording():
-    """Name a process actively writing a video file (recording), else []. Linux /proc."""
-    if platform.system() != "Linux" or not os.path.isdir("/proc"):
-        return []
+    """Name a process actively writing a video file (recording), else []."""
+    sysname = platform.system()
+    if sysname == "Linux" and os.path.isdir("/proc"):
+        return _detect_active_recording_linux()
+    if sysname in ("Windows", "Darwin"):
+        return _detect_active_recording_fsgrow()
+    return []
+
+
+# Cross-platform behavioral catch-all for Windows/macOS (no /proc): a recorder
+# keeps a video file *growing* and write-locked while it captures. We scan the
+# usual output locations and flag any video file that grew since the last scan, or
+# is currently write-locked, with a fresh mtime — so OBS, Game Bar, Bandicam, and
+# even an unknown/renamed recorder are caught while active.
+_FSGROW_CACHE = {}
+
+
+def _candidate_record_dirs():
+    home = os.path.expanduser("~")
+    names = ("Videos", "Movies", "Desktop", "Documents", "Downloads", "Pictures")
+    dirs = [os.path.join(home, n) for n in names]
+    dirs.append(os.path.join(home, "Videos", "Captures"))        # Windows Game Bar default
+    dirs.append(os.path.join(home, "Pictures", "Camera Roll"))   # Windows camera/capture
+    # OneDrive-redirected Desktop/Documents/Pictures are common on managed Windows.
+    od = os.environ.get("OneDrive") or os.environ.get("OneDriveConsumer")
+    if od:
+        dirs += [os.path.join(od, n) for n in ("Desktop", "Documents", "Pictures", "Videos")]
+    pub = os.environ.get("PUBLIC")
+    if pub:
+        dirs.append(os.path.join(pub, "Videos"))
+    tmp = os.environ.get("TEMP") or os.environ.get("TMP") or "/tmp"
+    dirs.append(tmp)
+    # De-dup while preserving order.
+    seen, out = set(), []
+    for d in dirs:
+        if d not in seen and os.path.isdir(d):
+            seen.add(d)
+            out.append(d)
+    return out
+
+
+def _file_write_locked(path):
+    """Windows: a file another process holds open for writing refuses an append
+    open (sharing violation). Elsewhere concurrent opens are usually allowed, so
+    the growth check carries macOS."""
+    try:
+        with open(path, "ab"):
+            return False
+    except OSError:
+        return True
+
+
+def _detect_active_recording_fsgrow():
+    import time as _time
+    now = _time.time()
+    found, scanned, new_cache = [], 0, {}
+    for d in _candidate_record_dirs():
+        try:
+            entries = os.listdir(d)
+        except OSError:
+            continue
+        for name in entries:
+            if not name.lower().endswith(_RECORD_VIDEO_EXTS):
+                continue
+            path = os.path.join(d, name)
+            if any(m in path for m in _PIPELINE_MARKERS):
+                continue
+            try:
+                st = os.stat(path)
+            except OSError:
+                continue
+            scanned += 1
+            if scanned > 4000:
+                break
+            new_cache[path] = st.st_size
+            if now - st.st_mtime > 8:
+                continue  # not being written right now
+            prev = _FSGROW_CACHE.get(path)
+            growing = prev is not None and st.st_size > prev
+            if growing or _file_write_locked(path):
+                found.append("Active screen recording — %s" % name)
+    _FSGROW_CACHE.clear()
+    _FSGROW_CACHE.update(new_cache)
+    return sorted(set(found))[:5]
+
+
+def _detect_active_recording_linux():
     try:
         pids = [p for p in os.listdir("/proc") if p.isdigit()]
     except OSError:
@@ -300,9 +385,164 @@ _SHARE_APPS = ("Discord", "WEBRTC", "OBS", "Streamlabs", "XSplit", "Wirecast", "
                "Firefox", "Brave", "Edge", "Opera", "Vivaldi", "vlc")
 
 
+# Phrases that appear in the on-screen "you are sharing / presenting" indicator
+# windows that Zoom, Teams, Meet, Discord, etc. show ONLY while actively sharing —
+# so matching them flags an in-progress share, not merely a running conferencing app.
+_WIN_SHARE_TITLE_PHRASES = (
+    "you are screen sharing", "you're screen sharing", "stop sharing",
+    "sharing your screen", "is sharing your screen", "you are presenting",
+    "you're presenting", "stop presenting", "screen sharing", "you are sharing",
+    "recording in progress", "go live",
+)
+
+
+def _detect_screen_sharing_windows():
+    """Best-effort Windows screen-share detection: scan visible window titles for
+    the active-sharing indicator that apps show while a share is in progress."""
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    titles = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+    def _cb(hwnd, _lparam):
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        n = user32.GetWindowTextLengthW(hwnd)
+        if n and n > 0:
+            buf = ctypes.create_unicode_buffer(n + 1)
+            user32.GetWindowTextW(hwnd, buf, n + 1)
+            if buf.value:
+                titles.append(buf.value.lower())
+        return True
+
+    user32.EnumWindows(_cb, 0)
+    for t in titles:
+        for p in _WIN_SHARE_TITLE_PHRASES:
+            if p in t:
+                return ["Active screen sharing — %s" % t[:60]]
+    return []
+
+
+def _macos_screen_watcher_present():
+    """True if the WindowServer reports an active screen 'watcher' (i.e. the screen
+    is being captured/recorded/mirrored right now), via the private CoreGraphics/
+    SkyLight call `bool CGSIsScreenWatcherPresent(void)`.
+
+    This is the strongest macOS signal: it needs NO Screen Recording permission and
+    fires for ScreenCaptureKit, the built-in screencapture/QuickTime, Zoom/Teams/
+    Discord screen share, and AirPlay mirroring. It cannot name the capturing app
+    (the window-title scan below adds that when permission is granted)."""
+    import ctypes
+    for path in (
+        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
+        "/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight",
+    ):
+        try:
+            lib = ctypes.cdll.LoadLibrary(path)
+        except OSError:
+            continue
+        if not hasattr(lib, "CGSIsScreenWatcherPresent"):
+            continue
+        fn = lib.CGSIsScreenWatcherPresent
+        fn.restype = ctypes.c_bool
+        fn.argtypes = []
+        try:
+            return bool(fn())
+        except Exception:
+            continue
+    return False
+
+
+def _macos_share_window_label():
+    """Best-effort name of the sharing app from on-screen window titles. Returns ""
+    when the agent lacks Screen Recording permission (titles are redacted then)."""
+    import ctypes
+    from ctypes import c_void_p, c_uint32, c_long, c_char_p, create_string_buffer
+
+    cg = ctypes.cdll.LoadLibrary(
+        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+    cf = ctypes.cdll.LoadLibrary(
+        "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+    cg.CGWindowListCopyWindowInfo.restype = c_void_p
+    cg.CGWindowListCopyWindowInfo.argtypes = [c_uint32, c_uint32]
+    cf.CFArrayGetCount.restype = c_long
+    cf.CFArrayGetCount.argtypes = [c_void_p]
+    cf.CFArrayGetValueAtIndex.restype = c_void_p
+    cf.CFArrayGetValueAtIndex.argtypes = [c_void_p, c_long]
+    cf.CFDictionaryGetValue.restype = c_void_p
+    cf.CFDictionaryGetValue.argtypes = [c_void_p, c_void_p]
+    cf.CFStringCreateWithCString.restype = c_void_p
+    cf.CFStringCreateWithCString.argtypes = [c_void_p, c_char_p, c_uint32]
+    cf.CFStringGetCString.restype = ctypes.c_bool
+    cf.CFStringGetCString.argtypes = [c_void_p, c_char_p, c_long, c_uint32]
+    cf.CFRelease.argtypes = [c_void_p]
+    UTF8 = 0x08000100
+
+    def to_str(ref):
+        if not ref:
+            return ""
+        buf = create_string_buffer(512)
+        if cf.CFStringGetCString(ref, buf, 512, UTF8):
+            return buf.value.decode("utf-8", "ignore")
+        return ""
+
+    arr = cg.CGWindowListCopyWindowInfo(1, 0)  # kCGWindowListOptionOnScreenOnly, kCGNullWindowID
+    if not arr:
+        return ""
+    key = cf.CFStringCreateWithCString(None, b"kCGWindowName", UTF8)
+    titles = []
+    try:
+        for i in range(cf.CFArrayGetCount(arr)):
+            d = cf.CFArrayGetValueAtIndex(arr, i)
+            t = to_str(cf.CFDictionaryGetValue(d, key)).lower()
+            if t:
+                titles.append(t)
+    finally:
+        cf.CFRelease(arr)
+        cf.CFRelease(key)
+    for t in titles:
+        if any(p in t for p in _WIN_SHARE_TITLE_PHRASES):
+            return t[:60]
+    return ""
+
+
+def _detect_screen_sharing_macos():
+    """macOS capture/share detection. Primary signal is the WindowServer's screen-
+    watcher flag (no permission, catches all capture); the window-title scan adds
+    the app name when Screen Recording permission is granted."""
+    watching = False
+    try:
+        watching = _macos_screen_watcher_present()
+    except Exception:
+        watching = False
+    label = ""
+    try:
+        label = _macos_share_window_label()
+    except Exception:
+        label = ""
+    if watching:
+        return ["Active screen capture/recording" + (" — %s" % label if label else " (macOS)")]
+    if label:  # watcher API unavailable but a sharing-indicator window is visible
+        return ["Active screen sharing — %s" % label]
+    return []
+
+
 def detect_screen_sharing():
-    """Detect an active PipeWire screencast (screen share/stream), else []. Linux."""
-    if platform.system() != "Linux":
+    """Detect an active screen share/stream, else []."""
+    sysname = platform.system()
+    if sysname == "Windows":
+        try:
+            return _detect_screen_sharing_windows()
+        except Exception:
+            return []
+    if sysname == "Darwin":
+        try:
+            return _detect_screen_sharing_macos()
+        except Exception:
+            return []
+    if sysname != "Linux":
         return []
     env = dict(os.environ)
     env.setdefault("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid())
@@ -496,6 +736,80 @@ def build_status():
         "clean": len(threats) == 0,
         "checkedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+
+
+# --- Instance management (used by the tray's "Quit") -------------------------
+#
+# A single Quit should stop the agent completely — this tray plus any other copy
+# (a headless autostart instance, a duplicate, the native binary). We find them by
+# command line and terminate each, then exit ourselves last.
+
+_AGENT_MARKERS = ("tray.py", "agent.py", "arqx-agent", "arqx-atlas")
+
+
+def _proc_cmdlines():
+    """Yield (pid, lowercased command line) for all processes. Best-effort, stdlib-only."""
+    sysname = platform.system()
+    if sysname == "Linux":
+        try:
+            pids = os.listdir("/proc")
+        except OSError:
+            return
+        for pid in pids:
+            if not pid.isdigit():
+                continue
+            try:
+                with open("/proc/%s/cmdline" % pid, "rb") as f:
+                    cl = f.read().replace(b"\x00", b" ").decode("utf-8", "ignore")
+            except OSError:
+                continue
+            yield int(pid), cl.lower()
+    elif sysname == "Darwin":
+        try:
+            out = subprocess.check_output(["ps", "-axww", "-o", "pid=,command="],
+                                          text=True, timeout=10)
+        except Exception:
+            return
+        for line in out.splitlines():
+            line = line.strip()
+            num, _, rest = line.partition(" ")
+            if num.isdigit():
+                yield int(num), rest.lower()
+    elif sysname == "Windows":
+        ps = ("Get-CimInstance Win32_Process | "
+              "ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }")
+        try:
+            out = subprocess.check_output(["powershell", "-NoProfile", "-Command", ps],
+                                          text=True, timeout=15)
+        except Exception:
+            return
+        for line in out.splitlines():
+            pid, tab, cl = line.partition("\t")
+            if tab and pid.strip().isdigit():
+                yield int(pid.strip()), cl.lower()
+
+
+def running_agent_pids():
+    """PIDs of every running ARQX Atlas agent process (tray / headless / native)."""
+    return [pid for pid, cl in _proc_cmdlines() if any(m in cl for m in _AGENT_MARKERS)]
+
+
+def kill_all_instances():
+    """Terminate every agent process — this one LAST — then exit. A single tray
+    Quit stops the agent completely."""
+    me = os.getpid()
+    for pid in running_agent_pids():
+        if pid == me:
+            continue
+        try:
+            if platform.system() == "Windows":
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+            else:
+                os.kill(pid, signal.SIGTERM)
+        except Exception:
+            pass
+    os._exit(0)
 
 
 # --- HTTP server -------------------------------------------------------------

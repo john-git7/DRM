@@ -1,12 +1,12 @@
 # DRMShield
 
-> A browser-based DRM prototype: AES-128 encrypted HLS, a JWT key server with short-lived signed key grants, a localhost screen-recorder agent, a hardened HLS.js player, and forensic watermarking with session audit logging.
+> A browser-based DRM prototype: AES-128 encrypted HLS, a JWT key server with short-lived signed key grants, a localhost screen-recorder agent, a hardened HLS.js player, and an encrypted forensic QR (decoded only by the in-app scanner) with session audit logging.
 
 ---
 
 ## What it does
 
-Upload an MP4. The server encrypts it into AES-128 HLS and stores the keys separately. The browser cannot get a decryption key until a JWT-authenticated, enrolled user passes a device and IP check and a localhost agent confirms no screen recorder is running — and even then the key grant expires in 30 seconds. The player adds DevTools lockout, focus pausing, a moving identity watermark, and a faint forensic overlay, while every session is written to an audit log.
+Upload an MP4. The server encrypts it into AES-128 HLS and stores the keys separately. The browser cannot get a decryption key until a JWT-authenticated, enrolled user passes a device and IP check and a localhost agent confirms no screen recorder is running — and even then the key grant expires in 30 seconds. The player adds DevTools lockout, focus pausing, and a small encrypted forensic QR that flashes at a random spot every few minutes — readable only by the app's own authenticated scanner — while every session is written to an audit log.
 
 No Widevine. No FairPlay. Pure TypeScript front-to-back, plus a small standard-library Python agent.
 
@@ -37,7 +37,7 @@ DRMShield is built in phases (see `assets/` for the diagram):
 3. **Recorder agent** — a localhost service reports running screen recorders; the player blocks playback if one is found or the agent is absent.
 4. **Player hardening** — HLS.js with no native controls, no download, no Picture-in-Picture, DevTools source teardown, and pause-on-blur/visibility-change.
 5. *(Native mobile app — intentionally out of scope.)*
-6. **Watermark + audit** — a moving identity watermark, a faint per-user forensic overlay, and an append-only session audit log.
+6. **Forensic QR + audit** — a small, faint QR appears at a random spot roughly every five minutes, carrying an AES-256-GCM token (identity, device, IP, time) that only the in-app Forensic Scanner can decrypt; plus an append-only session audit log.
 
 The server is the real security perimeter; the client measures raise the cost of capture and leave forensic traces. See [`SECURITY.md`](./SECURITY.md) for the full model and the security-review findings.
 
@@ -130,7 +130,7 @@ A leaked key URL is useless after 30 seconds, from another IP, or on another dev
 
 ```
 DRM/
-├── client/src/          # React SPA — HLS.js player, agent gate, watermarks, audit
+├── client/src/          # React SPA — HLS.js player, agent gate, forensic QR + scanner, audit
 ├── server/src/          # Express API — HLS transcode, key server, enrollment, audit
 │   ├── services/        # hlsService, keyService, keyGrantService, enrollmentService, auditService
 │   ├── controllers/     # video, hls, audit, auth

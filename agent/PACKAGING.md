@@ -42,6 +42,35 @@ cd agent
 
 For an `.msi`, use the [WiX Toolset](https://wixtoolset.org) against `dist/arqx-atlas-agent.exe`, or Inno Setup for a setup `.exe` (the script emits an `installer.iss` automatically when `iscc` is on `PATH`).
 
+### Portable embeddable-Python bundle (no Python on target, cross-built from Linux)
+
+Unlike PyInstaller, this path needs **no Windows machine** — it assembles a portable [embeddable Python](https://docs.python.org/3/using/windows.html#the-embeddable-package) with the tray's dependencies baked in. The embeddable Python is just a zip of a portable interpreter; the dependencies are installed by downloading their **Windows wheels** and unzipping them into `Lib\site-packages` (a wheel is a zip), so `python.exe` is never executed on the build host.
+
+```bash
+cd agent
+bash packaging/build_bundles.sh
+# → dist/arqx-atlas-agent-2.0.0-win-amd64.zip   (~18 MB, self-contained)
+```
+
+Environment overrides: `ARCHES="amd64 win32"` builds several architectures, `PY_VER=3.12.7` pins the interpreter, and `REBUILD=1` rebuilds the cached runtime. `make-winpy.sh` builds just the runtime (`build/winpy-<arch>/`) if you want it on its own.
+
+The zip unpacks to:
+
+```
+arqx-atlas-agent-<ver>-win-<arch>/
+  python/            portable Python + pystray + Pillow
+  app/               agent.py, tray.py, signatures.json, arqx-logo.png, requirements.txt
+  install.bat        per-user install to %LOCALAPPDATA% + Startup autostart (no admin)
+  uninstall.bat      stop the agent, remove autostart, delete the install
+  run-agent.bat      run the headless detector with a console (debugging)
+  launch-tray.vbs    silent tray launcher (pythonw, no console window)
+  installer.iss      optional Inno Setup script for a real setup.exe (compile with iscc)
+```
+
+On the target, the recipient either runs **`install.bat`** (no admin rights — copies to `%LOCALAPPDATA%\ARQX Atlas Agent`, adds a Startup shortcut to the silent launcher, and starts it) or compiles **`installer.iss`** with Inno Setup for a polished `setup.exe`. Both autostart the tray at login and leave the agent serving on `http://127.0.0.1:7891`. Updating `signatures.json` in `app/` does not require a rebuild.
+
+Prerequisites on the build host: `curl`, `unzip`, `zip`, and `python3` with `pip` (used only to fetch the Windows wheels).
+
 ## macOS — `.app` / `.dmg`
 
 ```bash

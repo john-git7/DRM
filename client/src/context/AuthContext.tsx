@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE } from '../config/api';
@@ -43,14 +43,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   });
 
-  useEffect(() => {
-    if (token && isTokenExpired(token)) {
-      localStorage.removeItem(TOKEN_KEY);
-      setToken(null);
-      navigate('/login', { replace: true });
-    }
-  }, [token, navigate]);
-
   const login = useCallback(async (username: string, password: string) => {
     const res = await axios.post<{ token: string }>(`${API_BASE}/auth/login`, { username, password });
     localStorage.setItem(TOKEN_KEY, res.data.token);
@@ -63,6 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     navigate('/login', { replace: true });
   }, [navigate]);
+
+  // Note: expired tokens are handled without an effect — the lazy initializer
+  // above strips an already-expired token at mount, and apiClient's 401
+  // interceptor logs out on any expiry detected server-side mid-session.
 
   return (
     <AuthContext.Provider value={{ token, username: decodeUsername(token), isAuthenticated: !!token, login, logout }}>
