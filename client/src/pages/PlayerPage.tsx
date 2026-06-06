@@ -14,6 +14,7 @@ import axios from 'axios';
 import { getDeviceFingerprint } from '../utils/deviceFingerprint';
 import { checkAgent } from '../utils/agentCheck';
 import { sendAudit } from '../utils/audit';
+import { onCaptureEvent } from '../utils/mobileProtection';
 import { formatBytes, formatDate } from '../utils/format';
 import type { Video, AgentStatus, AgentThreat } from '../types';
 
@@ -27,6 +28,7 @@ export default function PlayerPage() {
   const [loading, setLoading] = useState(true);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [screenCaptureActive, setScreenCaptureActive] = useState(false);
 
   const [focusLossDetectEnabled, setFocusLossDetectEnabled] = useState(true);
   const [rightClickProtectEnabled, setRightClickProtectEnabled] = useState(true);
@@ -162,6 +164,26 @@ export default function PlayerPage() {
     }
   }, [devToolsOpen, filename]);
 
+  // Native (Capacitor) builds: FLAG_SECURE / iOS overlay already black out
+  // recordings at the OS level — here we also react in-app, blacking out the
+  // player and logging a forensic/audit event, like the desktop recorder agent.
+  // No-op on the web build.
+  useEffect(() => {
+    let unsubscribe = () => {};
+    onCaptureEvent((event) => {
+      const deviceId = deviceIdRef.current ?? undefined;
+      if (event === 'screenRecordingStarted') {
+        setScreenCaptureActive(true);
+        sendAudit({ event: 'screen-capture-detected', videoId: filename, deviceId });
+      } else if (event === 'screenRecordingStopped') {
+        setScreenCaptureActive(false);
+      } else if (event === 'screenshotTaken') {
+        sendAudit({ event: 'screenshot-detected', videoId: filename, deviceId });
+      }
+    }).then((u) => { unsubscribe = u; });
+    return () => unsubscribe();
+  }, [filename]);
+
   const retry = () => { if (video) preparePlayback(video); };
   const reprocess = async () => {
     try {
@@ -179,7 +201,7 @@ export default function PlayerPage() {
     <div className="max-w-6xl mx-auto">
       {/* Full-screen blackout the instant a recorder/capture threat is detected:
           a screen recording of the page now captures only black + the viewer's identity. */}
-      {agent.state === 'threat' && (
+      {(agent.state === 'threat' || screenCaptureActive) && (
         <CaptureBlackout identity={username ?? 'Authenticated User'} threats={agent.threats} onRetry={retry} />
       )}
 
