@@ -18,7 +18,7 @@ On the plain web build every native call is a guarded no-op, so one codebase run
 ## Prerequisites
 
 - Node 24 + pnpm (as for the web client).
-- **Android:** Android Studio + JDK 17. The screen-recording detection events use the Android 15 (API 35) `DETECT_SCREEN_RECORDING` permission, which the plugin declares; `FLAG_SECURE` works on all versions.
+- **Android:** JDK 21 + the Android SDK (platform 35, build-tools 35). Android Studio bundles these, or install the command-line SDK for headless builds (see below). `FLAG_SECURE` (the capture block) needs no permission; the Android 15 (API 35)+ screen-recording **detection** callbacks require `android.permission.DETECT_SCREEN_RECORDING` in `android/app/src/main/AndroidManifest.xml` — add it after `cap add android` (and commit the native project to keep it).
 - **iOS:** macOS + Xcode (iOS builds cannot be produced on Linux/Windows).
 
 ## Build & run
@@ -39,6 +39,18 @@ pnpm cap:ios               # = pnpm build && cap sync ios   && cap open ios
 ```
 
 `cap open` launches Android Studio / Xcode; build and run on a device or emulator from there. `client/android` and `client/ios` are gitignored by default — once you customize the native side (icons, manifest, signing), un-ignore and commit them.
+
+### Headless Android build (no IDE)
+
+The debug APK can be built entirely from the command line (this is how `client/dist-mobile/drmshield-<ver>-debug.apk` is produced):
+
+```bash
+# one-time: JDK 21 + Android SDK (platform 35 + build-tools 35) on PATH as ANDROID_HOME
+cd client && pnpm build && pnpm exec cap sync android
+cd android && ./gradlew assembleDebug
+# → app/build/outputs/apk/debug/app-debug.apk
+# install on a connected device:  adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
 ## Pointing the app at your server (important)
 

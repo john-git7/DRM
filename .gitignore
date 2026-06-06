@@ -36,3 +36,6 @@ client/ios/
 # Env — private repo: server/.env is committed for convenience (TEST values only).
 # Real deployments MUST replace JWT_SECRET/STREAM_SECRET/ADMIN_PASSWORD and keep them
 # out of git. keys.json / enrollments / audit / videos stay ignored (live secrets/state).
+
+# Capacitor build output (APK/IPA artifacts)
+client/dist-mobile/
