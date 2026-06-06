@@ -10,6 +10,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './hooks/useAuth';
 import { useDevTools } from './hooks/useDevTools';
+import { enableScreenProtection } from './utils/mobileProtection';
 
 function Header() {
   const location = useLocation();
@@ -98,6 +99,10 @@ function AppShell() {
   const [windowFocused, setWindowFocused] = useState(true);
 
   const devToolsStatus = useDevTools();
+
+  // Native (Capacitor) builds only: turn on OS screen protection (Android
+  // FLAG_SECURE / iOS privacy overlay). No-op on the web.
+  useEffect(() => { void enableScreenProtection(); }, []);
 
   useEffect(() => {
     const handleBlur = () => {

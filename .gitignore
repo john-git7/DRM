@@ -27,6 +27,12 @@ agent/build/
 agent-go/dist/
 *.deb
 
+# Capacitor — generated native projects (regenerate with `cap add android|ios`).
+# Un-ignore and commit these once you customize the native side (manifest, signing).
+client/android/
+client/ios/
+.capacitor/
+
 # Env — private repo: server/.env is committed for convenience (TEST values only).
 # Real deployments MUST replace JWT_SECRET/STREAM_SECRET/ADMIN_PASSWORD and keep them
 # out of git. keys.json / enrollments / audit / videos stay ignored (live secrets/state).
