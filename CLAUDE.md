@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Continuing in-progress work?** Read [`HANDOFF.md`](./HANDOFF.md) first — it has the current branch map, what's done vs. pending, the build/run quick reference, and the next steps.
+
 ## Project Overview
 
 DRMShield — Secure Video Player prototype. Content protection for video streaming built on AES-128 encrypted HLS, a JWT-backed key server, a localhost recorder-detection agent, a hardened HLS.js player, and forensic watermarking plus session audit logging. Client is a React SPA; server is an Express REST API; the agent is a standalone stdlib-only Python service.
