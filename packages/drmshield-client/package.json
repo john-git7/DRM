@@ -1,0 +1,27 @@
+{
+  "name": "@drmshield/client",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/drmshield-client.umd.cjs",
+  "module": "dist/drmshield-client.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/drmshield-client.js",
+      "require": "./dist/drmshield-client.umd.cjs"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc --emitDeclarationOnly --noEmit false",
+    "dev": "vite build --watch"
+  },
+  "peerDependencies": {
+    "hls.js": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

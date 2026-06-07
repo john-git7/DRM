@@ -3,10 +3,14 @@
   "private": true,
   "version": "1.0.0",
   "description": "DRMShield — run the server, client, and ARQX Atlas agent together",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "predev": "sh scripts/free-ports.sh 5000 ${CLIENT_PORT:-5180}",
     "dev": "concurrently -k -n server,client -c blue,green \"CLIENT_ORIGIN=http://localhost:${CLIENT_PORT:-5180} npm --prefix server run dev\" \"npm --prefix client run dev -- --port ${CLIENT_PORT:-5180} --strictPort\"",
-    "install:all": "npm install && npm --prefix server install && npm --prefix client install"
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "build:packages": "pnpm --filter '@drmshield/*' run build"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
