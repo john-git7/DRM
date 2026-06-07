@@ -55,7 +55,7 @@ export default function PlayerPage() {
 
       const agentStatus = await checkAgent();
       setAgent(agentStatus);
-      const threatLabels = agentStatus.threats.map((t) => `${t.category}: ${t.name}`);
+      const threatLabels = agentStatus.threats.map((t: AgentThreat) => `${t.category}: ${t.name}`);
       sendAudit({
         event: 'agent-check',
         videoId: current.filename,
@@ -156,7 +156,7 @@ export default function PlayerPage() {
       const status = await checkAgent();
       if (status.state !== 'clean') {
         setAgent(status);
-        sendAudit({ event: 'playback-blocked', videoId: filename, deviceId: deviceIdRef.current ?? undefined, agentStatus: status.state, recorders: status.threats.map((t) => `${t.category}: ${t.name}`) });
+        sendAudit({ event: 'playback-blocked', videoId: filename, deviceId: deviceIdRef.current ?? undefined, agentStatus: status.state, recorders: status.threats.map((t: AgentThreat) => `${t.category}: ${t.name}`) });
         return; // agent.state changes → effect re-runs, loop stops naturally
       }
       timerId = setTimeout(poll, 1500 + Math.random() * 2500);
