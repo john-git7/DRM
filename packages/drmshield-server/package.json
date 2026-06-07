@@ -1,7 +1,9 @@
 {
   "name": "@drmshield/server",
   "version": "0.1.0",
-  "private": true,
+  "description": "DRMShield server-side SDK — JWT auth engine and HMAC key-grant engine",
+  "license": "UNLICENSED",
+  "files": ["dist", "README.md"],
   "main": "./dist/cjs/index.js",
   "types": "./dist/cjs/index.d.ts",
   "exports": {
