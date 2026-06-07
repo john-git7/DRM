@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { DevToolsStatus } from '../types';
+import { detectDevTools } from '@drmshield/client';
+import type { DevToolsStatus } from '@drmshield/client';
 
 const INITIAL_STATUS: DevToolsStatus = {
   isOpen: false,
@@ -18,57 +19,12 @@ export function useDevTools(): DevToolsStatus {
   const [status, setStatus] = useState<DevToolsStatus>(INITIAL_STATUS);
 
   useEffect(() => {
-    const runDetection = () => {
-      const outerW = window.outerWidth;
-      const innerW = window.innerWidth;
-      const outerH = window.outerHeight;
-      const innerH = window.innerHeight;
-      const dpr = window.devicePixelRatio || 1;
-
-      // Correct for Windows where outerWidth is often in physical pixels
-      const isOuterPhysical = outerW > window.screen.width;
-      const cssOuterW = isOuterPhysical ? outerW / dpr : outerW;
-      const cssOuterH = isOuterPhysical ? outerH / dpr : outerH;
-
-      const cssDiffW = Math.max(0, cssOuterW - innerW);
-      const cssDiffH = Math.max(0, cssOuterH - innerH);
-
-      // Mobile devices have no dockable DevTools; virtual keyboard shrinks innerHeight causing false positives
-      const isMobile =
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-        window.matchMedia('(pointer: coarse)').matches;
-
-      const dimensionsTriggered = !isMobile && (cssDiffW > 100 || cssDiffH > 100);
-
-      // Debugger timing trap: open DevTools pauses this statement, making elapsed > 100ms
-      // Timing trap: open DevTools pauses the debugger statement, making elapsed > 100ms
-      let debuggerTriggered = false;
-      const start = performance.now();
-      new Function('debugger')();
-      if (performance.now() - start > 100) {
-        debuggerTriggered = true;
-      }
-
-      setStatus({
-        isOpen: dimensionsTriggered || debuggerTriggered,
-        dimensionsTriggered,
-        cssDiffW: Math.round(cssDiffW),
-        cssDiffH: Math.round(cssDiffH),
-        outerWidth: Math.round(cssOuterW),
-        outerHeight: Math.round(cssOuterH),
-        innerWidth: innerW,
-        innerHeight: innerH,
-        devicePixelRatio: dpr,
-        consoleHookTriggered: debuggerTriggered,
-      });
-    };
-
-    window.addEventListener('resize', runDetection);
-    const timer = setInterval(runDetection, 500);
-    runDetection();
-
+    const run = () => setStatus(detectDevTools());
+    window.addEventListener('resize', run);
+    const timer = setInterval(run, 500);
+    run();
     return () => {
-      window.removeEventListener('resize', runDetection);
+      window.removeEventListener('resize', run);
       clearInterval(timer);
     };
   }, []);

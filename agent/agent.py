@@ -172,7 +172,13 @@ def _list_process_names():
 
 
 def detect_processes():
-    """Return a list of {category, name} for every matched running process."""
+    """Return a list of {category, name} for every matched running process.
+
+    Two-branch dispatch per signature:
+    - active_only present: flag only when at least one active_only token is found;
+      match tokens (always-running siblings) are silently ignored.
+    - active_only absent: original behaviour — flag on any match token.
+    """
     try:
         normalized = [_normalize_proc_name(n) for n in _list_process_names()]
     except Exception as exc:  # noqa: BLE001
@@ -183,14 +189,25 @@ def detect_processes():
     for category, sigs in SIGNATURES.get("processes", {}).items():
         for sig in sigs:
             display = sig.get("name", "")
-            needles = [m.strip().lower() for m in sig.get("match", []) if m.strip()]
-            for proc in normalized:
-                if any(_signature_matches(proc, n) for n in needles):
-                    key = (category, display)
-                    if key not in seen:
+            key = (category, display)
+            if key in seen:
+                continue
+
+            if "active_only" in sig:
+                active_needles = [m.strip().lower() for m in sig["active_only"] if m.strip()]
+                if any(
+                    any(_signature_matches(proc, n) for n in active_needles)
+                    for proc in normalized
+                ):
+                    seen.add(key)
+                    found.append({"category": category, "name": display})
+            else:
+                needles = [m.strip().lower() for m in sig.get("match", []) if m.strip()]
+                for proc in normalized:
+                    if any(_signature_matches(proc, n) for n in needles):
                         seen.add(key)
                         found.append({"category": category, "name": display})
-                    break
+                        break
     return found
 
 
@@ -226,6 +243,169 @@ def detect_capture_devices():
         return []
     matched = [n for n in names if any(k in n.lower() for k in keywords)]
     return sorted(set(matched))
+
+
+# --- Active capture card detection (idle-plugged-in vs actually capturing) ---
+#
+# detect_capture_devices() above flags any matching hardware that is present.
+# That causes false positives: an Elgato sitting plugged-in-but-idle, or NVIDIA
+# ShadowPlay's always-running background service. The functions below only flag
+# devices that are actively being read right now.
+#
+# Windows: enumerate video-capture device interface symlinks from the registry,
+#          then probe each with CreateFileW. ERROR_SHARING_VIOLATION means
+#          another process holds the device open — actively capturing.
+# Linux:   scan /proc/<pid>/fd for symlinks that resolve to /dev/video* devices
+#          whose kernel name matches our capture-card keywords.
+# macOS:   no reliable non-privileged active-only method; falls back to static
+#          detect_capture_devices() so behaviour is unchanged on macOS.
+
+def _detect_active_capture_windows():
+    try:
+        import winreg
+        import ctypes
+    except ImportError:
+        return []
+
+    VIDEO_CAPTURE_GUID = "{65e8773d-8f56-11d0-a3b9-00a0c9223196}"
+    reg_path = r"SYSTEM\CurrentControlSet\Control\DeviceClasses\\" + VIDEO_CAPTURE_GUID
+
+    kernel32 = ctypes.windll.kernel32
+    GENERIC_READ = 0x80000000
+    FILE_SHARE_READ = 0x00000001
+    FILE_SHARE_WRITE = 0x00000002
+    OPEN_EXISTING = 3
+    ERROR_SHARING_VIOLATION = 32
+    INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+    keywords = [k.lower() for k in SIGNATURES.get("captureDeviceKeywords", [])]
+    active = []
+
+    try:
+        root = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path)
+    except OSError:
+        return []
+
+    try:
+        idx = 0
+        while True:
+            try:
+                dev_key_name = winreg.EnumKey(root, idx)
+            except OSError:
+                break
+            idx += 1
+            try:
+                dev_key = winreg.OpenKey(root, dev_key_name)
+            except OSError:
+                continue
+            try:
+                try:
+                    hash_key = winreg.OpenKey(dev_key, "#")
+                    symlink = winreg.QueryValueEx(hash_key, "SymbolicLink")[0]
+                    winreg.CloseKey(hash_key)
+                except OSError:
+                    continue
+                try:
+                    params = winreg.OpenKey(dev_key, r"#\Device Parameters")
+                    friendly = winreg.QueryValueEx(params, "FriendlyName")[0]
+                    winreg.CloseKey(params)
+                except OSError:
+                    friendly = dev_key_name
+            finally:
+                winreg.CloseKey(dev_key)
+
+            if keywords and not any(k in friendly.lower() for k in keywords):
+                continue
+
+            h = kernel32.CreateFileW(
+                symlink,
+                GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                None,
+                OPEN_EXISTING,
+                0,
+                None,
+            )
+            if h == INVALID_HANDLE_VALUE:
+                if kernel32.GetLastError() == ERROR_SHARING_VIOLATION:
+                    active.append(friendly)
+            else:
+                kernel32.CloseHandle(h)
+    finally:
+        winreg.CloseKey(root)
+
+    return sorted(set(active))
+
+
+def _detect_active_capture_linux():
+    import glob
+
+    video_devs = {}
+    for dev in glob.glob("/dev/video*"):
+        dev_name = os.path.basename(dev)
+        try:
+            with open("/sys/class/video4linux/%s/name" % dev_name, encoding="utf-8") as f:
+                device_name = f.read().strip()
+        except OSError:
+            device_name = dev_name
+        video_devs[dev] = device_name
+
+    if not video_devs:
+        return []
+
+    keywords = [k.lower() for k in SIGNATURES.get("captureDeviceKeywords", [])]
+    target_devs = {dev: name for dev, name in video_devs.items()
+                   if not keywords or any(k in name.lower() for k in keywords)}
+    if not target_devs:
+        return []
+
+    try:
+        pids = [p for p in os.listdir("/proc") if p.isdigit()]
+    except OSError:
+        return []
+
+    active, seen = [], set()
+    for pid in pids:
+        fd_dir = "/proc/%s/fd" % pid
+        try:
+            fds = os.listdir(fd_dir)
+        except OSError:
+            continue
+        for fd in fds:
+            try:
+                link = os.readlink(os.path.join(fd_dir, fd))
+            except OSError:
+                continue
+            if link not in target_devs or link in seen:
+                continue
+            seen.add(link)
+            try:
+                with open("/proc/%s/comm" % pid, encoding="utf-8") as f:
+                    comm = f.read().strip()
+            except OSError:
+                comm = "pid " + pid
+            active.append("Capture card active — %s (%s)" % (target_devs[link], comm))
+
+    return sorted(set(active))
+
+
+def detect_active_capture_devices():
+    """Return capture card names being actively read (not just plugged in)."""
+    sysname = platform.system()
+    if sysname == "Windows":
+        try:
+            return _detect_active_capture_windows()
+        except Exception as exc:  # noqa: BLE001
+            print("[warn] active capture check (Windows) failed ({})".format(exc), file=sys.stderr)
+            return []
+    if sysname == "Linux":
+        try:
+            return _detect_active_capture_linux()
+        except Exception as exc:  # noqa: BLE001
+            print("[warn] active capture check (Linux) failed ({})".format(exc), file=sys.stderr)
+            return []
+    # macOS: no reliable active-only detection without Screen Recording permission
+    return detect_capture_devices()
 
 
 # --- Active screen-recording / capture detection (Linux) ---------------------
@@ -710,8 +890,9 @@ def _cached_scans():
 def build_status():
     proc_threats = detect_processes()
     capture_devices, extensions = _cached_scans()
-    active_recording = detect_active_recording()  # fresh each call — must be timely
-    screen_sharing = detect_screen_sharing()      # fresh each call — must be timely
+    active_recording = detect_active_recording()        # fresh — must be timely
+    screen_sharing = detect_screen_sharing()            # fresh — must be timely
+    active_capture = detect_active_capture_devices()   # fresh — active-only, not idle presence
 
     recorders = [p["name"] for p in proc_threats if p["category"] != "Video downloader"]
     recorders += active_recording + screen_sharing
@@ -720,7 +901,7 @@ def build_status():
     threats = list(proc_threats)
     threats += [{"category": "Screen recording", "name": n} for n in active_recording]
     threats += [{"category": "Screen sharing", "name": n} for n in screen_sharing]
-    threats += [{"category": "Capture device", "name": n} for n in capture_devices]
+    threats += [{"category": "Capture device", "name": n} for n in active_capture]
     threats += [{"category": "Browser extension", "name": n} for n in extensions]
 
     return {
@@ -814,6 +995,14 @@ def kill_all_instances():
 
 # --- HTTP server -------------------------------------------------------------
 
+class AgentServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionAbortedError, BrokenPipeError, ConnectionResetError)):
+            return  # client closed connection mid-response — expected, not an error
+        super().handle_error(request, client_address)
+
+
 class AgentHandler(BaseHTTPRequestHandler):
     server_version = "ArqxAtlasAgent/" + VERSION
 
@@ -877,7 +1066,7 @@ def _signature_count():
 
 def main():
     try:
-        httpd = ThreadingHTTPServer((AGENT_HOST, AGENT_PORT), AgentHandler)
+        httpd = AgentServer((AGENT_HOST, AGENT_PORT), AgentHandler)
     except OSError as exc:
         print("[fatal] cannot bind {}:{} ({})".format(AGENT_HOST, AGENT_PORT, exc), file=sys.stderr)
         sys.exit(1)

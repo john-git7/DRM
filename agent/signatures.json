@@ -98,8 +98,12 @@
      "nvidia share",
      "nvsphelper",
      "nvcontainer",
-     "nvshare",
-     "nvspcaps"
+     "nvshare"
+    ],
+    "active_only": [
+     "nvspcaps",
+     "nvspcaps64",
+     "nvspcapture"
     ]
    },
    {
@@ -186,7 +190,9 @@
     "match": [
      "gamebar",
      "gamebarft",
-     "gamebarpresencewriter",
+     "gamebarpresencewriter"
+    ],
+    "active_only": [
      "bcastdvr",
      "broadcastdvrserver"
     ]

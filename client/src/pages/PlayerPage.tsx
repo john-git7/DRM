@@ -142,18 +142,45 @@ export default function PlayerPage() {
     return () => clearInterval(poll);
   }, [filename, video?.hlsStatus, preparePlayback]);
 
-  // Re-check the agent mid-session every 2.5s so a recorder launched after playback
-  // starts triggers an near-instant blackout (the recorder then captures only black).
+  // Re-check the agent mid-session so a recorder launched after playback starts
+  // triggers a near-instant blackout (the recorder then captures only black).
+  // Uses randomised recursive setTimeout (1500–4000ms) instead of a fixed interval
+  // to avoid predictable polling gaps. Three event-driven instant re-polls fire on
+  // tab-visible, window-focus, and video-play — each cancels the pending timer first.
   useEffect(() => {
     if (agent.state !== 'clean') return;
-    const recheck = setInterval(async () => {
+
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async () => {
       const status = await checkAgent();
       if (status.state !== 'clean') {
         setAgent(status);
         sendAudit({ event: 'playback-blocked', videoId: filename, deviceId: deviceIdRef.current ?? undefined, agentStatus: status.state, recorders: status.threats.map((t) => `${t.category}: ${t.name}`) });
+        return; // agent.state changes → effect re-runs, loop stops naturally
       }
-    }, 2500);
-    return () => clearInterval(recheck);
+      timerId = setTimeout(poll, 1500 + Math.random() * 2500);
+    };
+
+    const fireNow = () => {
+      if (timerId !== null) { clearTimeout(timerId); timerId = null; }
+      void poll();
+    };
+
+    const onVisibility = () => { if (!document.hidden) fireNow(); };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', fireNow);
+    document.addEventListener('play', fireNow, true); // capture phase — play doesn't bubble
+
+    timerId = setTimeout(poll, 1500 + Math.random() * 2500);
+
+    return () => {
+      if (timerId !== null) clearTimeout(timerId);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', fireNow);
+      document.removeEventListener('play', fireNow, true);
+    };
   }, [agent.state, filename]);
 
   // Audit a DevTools lockout once.
