@@ -1,16 +1,17 @@
 # @drmshield/server
 
-A framework-agnostic Node.js package that provides two security engines for the DRMShield video protection system:
+This package provides the server-side security logic for DRMShield. It handles two things:
 
-- **`KeyGrantEngine`** — issues and verifies short-lived HMAC-SHA256 stream grants that bind a key-release request to a specific video, IP address, device fingerprint, and username.
-- **`AuthEngine`** — issues and verifies signed JWTs for user authentication.
+- **Key grants** — short-lived tokens that authorize a browser to fetch an AES-128 decryption key
+- **JWT authentication** — login tokens for your users
 
-Neither engine has any dependency on Express, environment variables, or any specific HTTP framework. Secrets are passed at construction time, which makes the engines straightforward to test in isolation and safe to reuse across requests.
+It works with any Node.js HTTP framework (Express, Fastify, Hono, etc.) and has no framework-specific dependencies.
+
+---
 
 ## Requirements
 
-- Node.js 18 or later (the package imports `node:crypto` and `node:buffer` as explicit ESM specifiers)
-- `"type": "module"` in your consuming project, or an ESM-aware bundler
+- Node.js 18 or later
 
 ## Installation
 
@@ -18,54 +19,77 @@ Neither engine has any dependency on Express, environment variables, or any spec
 pnpm add @drmshield/server
 ```
 
-## Quick Start
+---
 
-The example below shows both engines working together on a typical key-grant flow. In a real application you would call `issueStreamToken` inside the route that hands the grant to the browser, and `verifyStreamToken` inside the route that serves the AES-128 decryption key.
+## Core Concept: What is a key grant?
+
+A key grant is a short-lived, signed token (30 seconds) that says:
+
+> "This specific user, on this specific device, from this specific IP address, may fetch the AES-128 key for this specific video — but only for the next 30 seconds."
+
+When the browser requests the decryption key, it presents this grant. The server checks the signature and all the bound claims before releasing the key. If anything does not match — wrong IP, wrong device, expired token — the key is refused.
+
+---
+
+## Quick Start
 
 ```typescript
 import { KeyGrantEngine, AuthEngine } from '@drmshield/server';
 
-// Instantiate once — both engines are stateless and safe to reuse.
+// Create one instance of each engine. Both are stateless and safe to reuse across requests.
 const grants = new KeyGrantEngine(process.env.STREAM_SECRET!);
 const auth   = new AuthEngine(process.env.JWT_SECRET!);
+```
 
-// ── On the key-grant route (JWT-protected) ──────────────────────────────────
+### Issue a key grant (when the user clicks play)
 
+```typescript
 function handleKeyGrant(req, res) {
   const { videoId } = req.params;
   const { deviceId } = req.body;
-  const ip       = req.ip;
-  const username = req.user.username; // from JWT middleware
 
-  const { grant, ttl } = grants.issueStreamToken(videoId, ip, deviceId, username);
+  const { grant, ttl } = grants.issueStreamToken(
+    videoId,
+    req.ip,
+    deviceId,
+    req.user.username, // from your JWT middleware
+  );
 
-  res.json({ grant, ttl });
+  res.json({ grant, ttl }); // send to browser
 }
+```
 
-// ── On the key-release route (grant-gated) ──────────────────────────────────
+### Verify the grant and release the key
 
+```typescript
 function handleKeyRelease(req, res) {
   const { videoId } = req.params;
-  const token    = req.headers['x-key-grant'] as string;
-  const deviceId = req.headers['x-device-id'] as string;
-  const ip       = req.ip;
 
-  const result = grants.verifyStreamToken(token, { videoId, ip, deviceId });
+  const result = grants.verifyStreamToken(
+    req.headers['x-key-grant'] as string,
+    {
+      videoId,
+      ip: req.ip,
+      deviceId: req.headers['x-device-id'] as string,
+    },
+  );
 
   if (!result.valid) {
     res.status(401).json({ error: result.reason });
     return;
   }
 
-  // result.claims is now available and fully verified
-  res.send(getAesKey(videoId));
+  res.send(getAesKey(videoId)); // only reached if the grant is valid
 }
+```
 
-// ── JWT issuance on login ────────────────────────────────────────────────────
+### Issue and verify login tokens
 
+```typescript
+// On login
 function handleLogin(req, res) {
   const { username, password } = req.body;
-  // validate credentials yourself — AuthEngine only handles token mechanics
+
   if (!credentialsAreValid(username, password)) {
     res.status(401).json({ error: 'Invalid credentials' });
     return;
@@ -75,8 +99,7 @@ function handleLogin(req, res) {
   res.json({ token });
 }
 
-// ── JWT verification middleware ──────────────────────────────────────────────
-
+// As middleware on protected routes
 function requireAuth(req, res, next) {
   const header = req.headers.authorization ?? '';
   if (!header.startsWith('Bearer ')) {
@@ -97,13 +120,11 @@ function requireAuth(req, res, next) {
 
 ## API Reference
 
-### `class KeyGrantEngine`
+### `KeyGrantEngine`
 
-#### `constructor(secret: string)`
+#### `new KeyGrantEngine(secret: string)`
 
-Creates a new grant engine. The `secret` is the HMAC key used to sign and verify all tokens produced by this instance. It must not be empty — the constructor throws an `Error` if it is.
-
-The same secret must be used on both the issuing side (key-grant route) and the verifying side (key-release route). Two instances created with the same secret are interchangeable.
+Creates a grant engine. The `secret` is the HMAC signing key. It must not be empty. Use the same secret on both the issuing side and the verifying side.
 
 ```typescript
 const grants = new KeyGrantEngine(process.env.STREAM_SECRET!);
@@ -111,86 +132,71 @@ const grants = new KeyGrantEngine(process.env.STREAM_SECRET!);
 
 ---
 
-#### `issueStreamToken(videoId, ip, deviceId, username): { grant: string; ttl: number }`
+#### `grants.issueStreamToken(videoId, ip, deviceId, username)`
 
-Issues a short-lived grant that binds a key-release request to a specific context.
+Issues a 30-second grant token.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `videoId` | `string` | The ID of the video being requested. |
-| `ip` | `string` | The caller's IP address. IPv6-mapped IPv4 addresses are normalized automatically. |
-| `deviceId` | `string` | A device fingerprint computed by the browser. |
-| `username` | `string` | The authenticated username, for audit purposes. |
+| `videoId` | `string` | The video the user is requesting |
+| `ip` | `string` | The caller's IP address (IPv6-mapped IPv4 is normalized automatically) |
+| `deviceId` | `string` | A fingerprint computed by the browser |
+| `username` | `string` | The authenticated username |
 
-Returns an object with:
-- `grant` — the token string to send to the browser
-- `ttl` — the token lifetime in seconds (always 30)
-
-The grant is a base64url-encoded JSON payload joined by a dot to a base64url HMAC-SHA256 signature. See [Token Format](#token-format) for details.
+**Returns:** `{ grant: string, ttl: number }` — the token string and its lifetime in seconds (always 30).
 
 ```typescript
-const { grant, ttl } = grants.issueStreamToken(
-  'vid-abc123',
-  req.ip,
-  req.body.deviceId,
-  req.user.username,
-);
-// send { grant, ttl } to the browser
+const { grant, ttl } = grants.issueStreamToken('vid-abc123', req.ip, deviceId, 'alice');
 ```
 
 ---
 
-#### `verifyStreamToken(token, expected): GrantVerifyResult`
+#### `grants.verifyStreamToken(token, expected)`
 
-Verifies a grant against the live request context. This method performs the following checks in order:
+Verifies a grant before releasing the key. Checks (in order):
 
-1. The token has the expected `payload.signature` shape.
-2. The HMAC-SHA256 signature matches — using a timing-safe byte comparison so the check does not leak information about partial matches.
-3. The JSON payload decodes and contains the required fields (`videoId`, `ip`, `deviceId`, `username`, `exp`).
-4. The grant has not expired (`exp` is checked against the current Unix timestamp).
-5. The `videoId` in the grant matches the video being requested.
-6. The IP address in the grant matches the caller's IP (after normalizing both sides).
-7. The `deviceId` in the grant matches the device fingerprint presented in the request.
+1. The token has the correct structure
+2. The HMAC signature is valid (timing-safe comparison)
+3. The payload contains all required fields
+4. The token has not expired
+5. The video ID matches
+6. The IP address matches
+7. The device fingerprint matches
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `token` | `string` | The grant string received from the browser. |
-| `expected.videoId` | `string` | The video ID from the URL being requested. |
-| `expected.ip` | `string` | The caller's current IP address. |
-| `expected.deviceId` | `string` | The device fingerprint presented in the request (e.g. from an `X-Device-Id` header). |
+| `token` | `string` | The grant string from the browser request |
+| `expected.videoId` | `string` | The video ID from the URL |
+| `expected.ip` | `string` | The caller's current IP |
+| `expected.deviceId` | `string` | The device fingerprint from the request header |
 
-Returns a discriminated union:
+**Returns** one of:
 
 ```typescript
-type GrantVerifyResult =
-  | { valid: true;  claims: GrantClaims }  // all checks passed
-  | { valid: false; reason: string };      // which check failed
+{ valid: true,  claims: GrantClaims }  // all checks passed — safe to release the key
+{ valid: false, reason: string }       // which check failed
 ```
 
-When `valid` is `true`, the `claims` object contains the fully verified payload and can be trusted. When `valid` is `false`, the `reason` string describes which check failed. Possible reasons are: `'malformed grant'`, `'bad signature'`, `'undecodable grant'`, `'malformed claims'`, `'grant expired'`, `'video mismatch'`, `'ip mismatch'`, `'device mismatch'`.
+Possible failure reasons: `'malformed grant'`, `'bad signature'`, `'undecodable grant'`, `'malformed claims'`, `'grant expired'`, `'video mismatch'`, `'ip mismatch'`, `'device mismatch'`.
 
 ```typescript
-const result = grants.verifyStreamToken(grantHeader, {
-  videoId: req.params.videoId,
-  ip: req.ip,
-  deviceId: req.headers['x-device-id'] as string,
-});
+const result = grants.verifyStreamToken(token, { videoId, ip: req.ip, deviceId });
 
 if (!result.valid) {
   return res.status(401).json({ error: result.reason });
 }
 
 // TypeScript now knows result.claims is GrantClaims
-console.log('Verified for user:', result.claims.username);
+console.log('Verified for:', result.claims.username);
 ```
 
 ---
 
-### `class AuthEngine`
+### `AuthEngine`
 
-#### `constructor(jwtSecret: string)`
+#### `new AuthEngine(jwtSecret: string)`
 
-Creates a new JWT engine. The `jwtSecret` is the signing key for all tokens produced by this instance. It must not be empty — the constructor throws an `Error` if it is.
+Creates a JWT engine. The `jwtSecret` must not be empty.
 
 ```typescript
 const auth = new AuthEngine(process.env.JWT_SECRET!);
@@ -198,50 +204,42 @@ const auth = new AuthEngine(process.env.JWT_SECRET!);
 
 ---
 
-#### `issueJwt(username: string): string`
+#### `auth.issueJwt(username: string): string`
 
-Signs and returns a JWT containing `{ username }` as the payload. The token expires after 24 hours.
+Returns a signed JWT containing `{ username }`. Expires after 24 hours.
 
 ```typescript
 const token = auth.issueJwt('alice');
-// returns a compact JWT string: "eyJ..."
 ```
 
 ---
 
-#### `verifyJwt(token: string): JwtPayload`
+#### `auth.verifyJwt(token: string): JwtPayload`
 
-Verifies the token's signature and expiry. Returns the decoded payload if valid. Throws a `JsonWebTokenError` (from the `jsonwebtoken` library) if the token is malformed, has an invalid signature, or has expired.
+Verifies the token's signature and expiry. Returns the decoded payload if valid. Throws a `JsonWebTokenError` if the token is malformed, has an invalid signature, or has expired.
 
 ```typescript
 try {
   const payload = auth.verifyJwt(token);
   console.log(payload.username); // 'alice'
-  console.log(payload.iat);      // issued-at Unix timestamp
-  console.log(payload.exp);      // expiry Unix timestamp
-} catch (err) {
+} catch {
   // token is invalid or expired
 }
 ```
 
 ---
 
-### `function normalizeIp(ip: string | undefined): string`
+### `normalizeIp(ip)`
 
-A utility function that normalizes IP address strings for consistent comparison. It handles two common edge cases:
-
-- **IPv6-mapped IPv4 addresses** — `::ffff:192.168.1.1` is normalized to `192.168.1.1`.
-- **IPv6 loopback** — `::1` is normalized to `127.0.0.1`.
-
-This function is used internally by `verifyStreamToken` on both sides of the IP comparison. It is also exported in case you need consistent IP normalization elsewhere in your server.
+A utility that normalizes IP address strings so that `::ffff:192.168.1.1` and `192.168.1.1` compare as equal. Used internally by `verifyStreamToken`, but exported in case you need it elsewhere.
 
 ```typescript
 import { normalizeIp } from '@drmshield/server';
 
-normalizeIp('::ffff:10.0.0.1');  // → '10.0.0.1'
-normalizeIp('::1');              // → '127.0.0.1'
-normalizeIp('10.0.0.1');         // → '10.0.0.1'
-normalizeIp(undefined);          // → ''
+normalizeIp('::ffff:10.0.0.1'); // → '10.0.0.1'
+normalizeIp('::1');             // → '127.0.0.1'
+normalizeIp('10.0.0.1');        // → '10.0.0.1'
+normalizeIp(undefined);         // → ''
 ```
 
 ---
@@ -254,7 +252,7 @@ interface GrantClaims {
   ip:       string;  // the IP the grant was issued to
   deviceId: string;  // the device fingerprint the grant was issued to
   username: string;  // the authenticated user
-  exp:      number;  // Unix expiry timestamp (30 seconds after issuance)
+  exp:      number;  // Unix expiry timestamp
 }
 
 type GrantVerifyResult =
@@ -270,30 +268,12 @@ interface JwtPayload {
 
 ---
 
-## Token Format
-
-A stream grant has the following structure:
-
-```
-<base64url-payload>.<base64url-signature>
-```
-
-The payload is the base64url encoding of the JSON-serialized `GrantClaims` object. The signature is a base64url-encoded HMAC-SHA256 digest of the string `keygrant:v1:<payload>`, computed using the secret provided to the `KeyGrantEngine` constructor.
-
-The domain prefix `keygrant:v1:` is mixed into every signature. This means a grant token cannot be replayed against any other HMAC endpoint that happens to share the same secret key, even if the token format looks similar.
-
-The payload is not encrypted — it is only signed. Do not store sensitive values (passwords, raw keys) in the grant claims.
-
----
-
 ## Security Notes
 
-**Timing-safe comparison.** Signature verification uses `crypto.timingSafeEqual` from Node's built-in crypto module. This prevents timing side-channel attacks that could otherwise allow an attacker to infer partial signature matches by measuring how long verification takes.
+**Timing-safe comparison.** Signature verification uses `crypto.timingSafeEqual`, which prevents timing side-channel attacks where an attacker measures how long verification takes to infer partial matches.
 
-**Claim-shape validation before field access.** The JSON payload is parsed and every expected field is type-checked before any claim is used in a comparison. This prevents prototype pollution and type confusion bugs that could arise from malformed tokens.
+**Short TTL by design.** Grants expire after 30 seconds. Even if an attacker captures a grant in transit, they have a very small window to misuse it — and the IP and device fingerprint checks close that window further.
 
-**Domain separation.** The HMAC input is prefixed with `keygrant:v1:`, which makes tokens produced by this engine incompatible with any other HMAC computation using the same key. If you ever need to add a second token type, use a different prefix.
+**No environment coupling.** This package never reads `process.env`. Secrets are passed at construction time, so the engines behave identically in test, staging, and production without any special configuration.
 
-**Short TTL by design.** Grants expire after 30 seconds. This limits the damage window if a grant is captured in transit. The key endpoint should always call `verifyStreamToken` immediately before releasing the key, not before.
-
-**No environment coupling.** The package never reads `process.env`. Secrets are injected at construction time so that the engines work identically in test, staging, and production environments without any special configuration.
+**Domain separation.** The HMAC input is prefixed with `keygrant:v1:`, which means grant tokens cannot be replayed against any other HMAC endpoint that shares the same secret key.

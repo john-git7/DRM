@@ -1,52 +1,61 @@
 # DRMShield Packages
 
-This directory contains two standalone packages extracted from the DRMShield video protection system. Each package provides pure, reusable security logic that can be dropped into any new project without pulling in any framework, HTTP library, or application-specific scaffolding.
+This directory contains two reusable packages extracted from the DRMShield video protection system.
 
-## Package Map
+## What are these packages?
 
-| Package | Purpose | Runtime |
-|---------|---------|---------|
-| [`@drmshield/server`](./drmshield-server) | HMAC-SHA256 short-lived stream grants and JWT issuance/verification | Node.js ≥ 18 |
-| [`@drmshield/client`](./drmshield-client) | Browser-side AES-128 HLS playback, DevTools detection, keyboard blocking, focus-loss protection | Browser (ES2020+) |
+When you want to protect a video, two things need to cooperate:
 
-## Getting Started
+1. **The server** needs to control who gets the decryption key and for how long.
+2. **The browser** needs to fetch that key securely and block any attempts to record or copy the video.
 
-Install dependencies from the workspace root, which will link both packages:
+These packages handle exactly those two jobs — one for each side.
 
-```bash
-pnpm install
-```
+| Package | Runs on | What it does |
+|---------|---------|--------------|
+| [`@drmshield/server`](./drmshield-server) | Node.js (server) | Issues short-lived key grants and JWT login tokens |
+| [`@drmshield/client`](./drmshield-client) | Browser | Plays encrypted video, blocks screen recorders and DevTools |
 
-To build both packages in one command:
-
-```bash
-pnpm build:packages
-```
-
-To work on a single package in isolation, navigate into its directory and run the build directly:
-
-```bash
-cd packages/drmshield-server
-pnpm build
-
-cd packages/drmshield-client
-pnpm build
-```
-
-## How the Two Packages Work Together
-
-The overall security model is a two-step handshake that keeps the AES-128 decryption key off the network until the moment it is needed, and even then only releases it to a verified, time-bounded request.
-
-**Step 1 — Grant issuance (server side)**
-
-When a user requests playback, the server calls `KeyGrantEngine.issueStreamToken()`, which produces a 30-second HMAC-SHA256 token. The token binds together the video ID, the caller's IP address, a device fingerprint, and the username. This grant is sent to the browser.
-
-**Step 2 — Authenticated stream attachment (client side)**
-
-The browser passes the grant to `DRMShieldClient.protectContent()`. The method creates an HLS.js instance with an `xhrSetup` hook that injects the grant and device fingerprint into every AES-128 key request as request headers. The key server receives the headers, calls `KeyGrantEngine.verifyStreamToken()`, and only releases the key if the signature is valid, the grant has not expired, and every bound claim matches the live request.
-
-The encrypted video segments are served publicly and are useless on their own. The key is released for at most 30 seconds to the exact IP and device the grant was issued for. A stolen grant URL does not help an attacker because the key endpoint checks both the grant and the device fingerprint independently.
+Neither package depends on any specific framework. You can use them with Express, Fastify, React, Vue, or plain JavaScript.
 
 ---
 
-For full API documentation, see the README inside each package directory.
+## How they work together
+
+Think of it as a two-step handshake:
+
+### Step 1 — The server issues a short-lived pass (30 seconds)
+
+When a user wants to watch a video, your server calls `KeyGrantEngine.issueStreamToken()`. This creates a signed token that says:
+
+> "User Alice, on device XYZ, from IP 1.2.3.4, may fetch the key for video `vid-abc` — but only for the next 30 seconds."
+
+This token is sent to the browser.
+
+### Step 2 — The browser uses the pass to fetch the key
+
+The browser calls `DRMShieldClient.protectContent()`. This method:
+
+1. Attaches the token to every AES-128 key request as a request header.
+2. The key server checks the token's signature, expiry, IP, and device fingerprint before releasing the key.
+3. If everything matches, the key is released and the video plays.
+
+The encrypted video segments are useless without the key, and the key is only released for 30 seconds to the exact device and IP the pass was issued for.
+
+---
+
+## Getting started
+
+```bash
+# From the workspace root — installs and links both packages
+pnpm install
+
+# Build both packages
+pnpm build:packages
+
+# Or build one at a time
+cd packages/drmshield-server && pnpm build
+cd packages/drmshield-client && pnpm build
+```
+
+For full API docs, see the README inside each package directory.
