@@ -1,84 +1,11 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { ShieldCheck, Film, Upload, ScanLine, AlertTriangle, LogOut } from 'lucide-react';
-import LibraryPage from './pages/LibraryPage';
-import UploadPage from './pages/UploadPage';
-import PlayerPage from './pages/PlayerPage';
-import ScannerPage from './pages/ScannerPage';
-import LoginPage from './pages/LoginPage';
-import { AuthProvider } from './context/AuthContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { useAuth } from './hooks/useAuth';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { ShieldCheck, AlertTriangle } from 'lucide-react';
+import LandingPage from './pages/LandingPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
+import { SecurityProvider, useSecurity } from './context/SecurityContext';
 import { useDevTools } from './hooks/useDevTools';
 import { enableScreenProtection } from './utils/mobileProtection';
-
-function Header() {
-  const location = useLocation();
-  const { isAuthenticated, logout } = useAuth();
-  const isActive = (path: string) => location.pathname === path;
-
-  return (
-    <header className="sticky top-0 z-50 bg-[#0a0a0a] border-b-2 border-white py-4 px-6 md:px-12 flex items-center justify-between">
-      <Link to="/" className="flex items-center gap-3 group">
-        <div className="p-2 bg-[#7c3aed] border-2 border-white group-hover:-translate-y-0.5 transition-transform"
-          style={{ boxShadow: '3px 3px 0px #fff' }}>
-          <ShieldCheck className="w-5 h-5 text-white" />
-        </div>
-        <span className="font-mono text-base md:text-lg font-black tracking-tight text-white uppercase">
-          DRM<span className="text-[#7c3aed]">Shield</span>
-        </span>
-      </Link>
-
-      <nav className="flex items-center gap-2 md:gap-4">
-        {isAuthenticated && (
-          <>
-            <Link
-              to="/"
-              className={`flex items-center gap-1.5 text-xs md:text-sm font-bold uppercase tracking-wide px-3 py-1.5 border-2 transition-all duration-75 ${
-                isActive('/')
-                  ? 'bg-[#7c3aed] border-white text-white'
-                  : 'bg-transparent border-transparent text-gray-400 hover:border-white/40 hover:text-white'
-              }`}
-            >
-              <Film className="w-4 h-4" />
-              Library
-            </Link>
-            <Link
-              to="/upload"
-              className={`flex items-center gap-1.5 text-xs md:text-sm font-bold uppercase tracking-wide px-3 py-1.5 border-2 transition-all duration-75 ${
-                isActive('/upload')
-                  ? 'bg-[#7c3aed] border-white text-white'
-                  : 'bg-transparent border-transparent text-gray-400 hover:border-white/40 hover:text-white'
-              }`}
-            >
-              <Upload className="w-4 h-4" />
-              Upload
-            </Link>
-            <Link
-              to="/scanner"
-              className={`flex items-center gap-1.5 text-xs md:text-sm font-bold uppercase tracking-wide px-3 py-1.5 border-2 transition-all duration-75 ${
-                isActive('/scanner')
-                  ? 'bg-[#7c3aed] border-white text-white'
-                  : 'bg-transparent border-transparent text-gray-400 hover:border-white/40 hover:text-white'
-              }`}
-            >
-              <ScanLine className="w-4 h-4" />
-              Scanner
-            </Link>
-            <button
-              onClick={logout}
-              className="flex items-center gap-1.5 text-xs md:text-sm font-bold uppercase tracking-wide px-3 py-1.5 border-2 border-transparent text-gray-400 hover:border-white/40 hover:text-white transition-all duration-75"
-              title="Sign out"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden md:inline">Sign Out</span>
-            </button>
-          </>
-        )}
-      </nav>
-    </header>
-  );
-}
 
 function Footer() {
   return (
@@ -88,20 +15,24 @@ function Footer() {
         <img src="/arqx-logo.png" alt="ARQX" className="h-4 w-auto" />
         <span className="text-[11px] text-gray-300 font-mono uppercase tracking-[0.2em] font-black">Atlas</span>
       </div>
-      <span className="text-[11px] text-gray-600 font-mono uppercase tracking-widest">
-        &copy; {new Date().getFullYear()} DRMShield — Secured client-side environment
-      </span>
+      <div className="flex items-center gap-4 mt-2">
+        <span className="text-[11px] text-gray-600 font-mono uppercase tracking-widest">
+          &copy; {new Date().getFullYear()} DRMShield — Secured client-side environment
+        </span>
+        <Link to="/admin" className="text-gray-800 hover:text-gray-500 transition-colors" title="Admin Dashboard">
+          <ShieldCheck className="w-3 h-3" />
+        </Link>
+      </div>
     </footer>
   );
 }
 
 function AppShell() {
   const [windowFocused, setWindowFocused] = useState(true);
-
   const devToolsStatus = useDevTools();
+  const { devToolsDetectEnabled, focusLossDetectEnabled } = useSecurity();
 
-  // Native (Capacitor) builds only: turn on OS screen protection (Android
-  // FLAG_SECURE / iOS privacy overlay). No-op on the web.
+  // Native (Capacitor) builds only
   useEffect(() => { void enableScreenProtection(); }, []);
 
   useEffect(() => {
@@ -120,30 +51,26 @@ function AppShell() {
     };
   }, []);
 
-  if (devToolsStatus.isOpen) {
-    return <div className="w-screen h-screen bg-black" />;
+  if (devToolsDetectEnabled && devToolsStatus.isOpen) {
+    return <div className="w-screen h-screen bg-black flex items-center justify-center text-white font-mono uppercase">DevTools Detected - Access Blocked</div>;
   }
 
-  const isBlurred = !windowFocused;
+  const isBlurred = focusLossDetectEnabled && !windowFocused;
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-gray-100 relative">
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isBlurred ? 'blur-xl select-none pointer-events-none' : ''}`}>
-        <Header />
         <main className="flex-grow container mx-auto px-4 md:px-8 py-8">
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
-            <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
-            <Route path="/player/:filename" element={<ProtectedRoute><PlayerPage /></ProtectedRoute>} />
-            <Route path="/scanner" element={<ProtectedRoute><ScannerPage /></ProtectedRoute>} />
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/admin" element={<AdminDashboardPage />} />
             <Route path="*" element={
               <div className="text-center py-24">
                 <div className="inline-block brutal-card p-10 max-w-md">
                   <p className="font-mono text-6xl font-black text-[#7c3aed] mb-4">404</p>
                   <h2 className="text-xl font-black text-white uppercase tracking-wide mb-2">Page Not Found</h2>
                   <p className="text-gray-400 text-sm mb-8">The page you are looking for does not exist.</p>
-                  <Link to="/" className="brutal-btn">Return to Library</Link>
+                  <Link to="/" className="brutal-btn">Return Home</Link>
                 </div>
               </div>
             } />
@@ -152,7 +79,7 @@ function AppShell() {
         <Footer />
       </div>
 
-      {!windowFocused && (
+      {isBlurred && (
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/90 z-[100] text-center px-4">
           <div className="brutal-card p-8 max-w-sm w-full">
             <AlertTriangle className="w-12 h-12 text-[#f59e0b] mx-auto mb-4" />
@@ -170,9 +97,9 @@ function AppShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
+      <SecurityProvider>
         <AppShell />
-      </AuthProvider>
+      </SecurityProvider>
     </BrowserRouter>
   );
 }
