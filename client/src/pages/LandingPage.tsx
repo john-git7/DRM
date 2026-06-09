@@ -43,7 +43,7 @@ export default function LandingPage() {
       .then((res) => {
         if (cancelled) return;
         if (res.data.length > 0) {
-          setFilename(res.data[0].filename);
+          setFilename(res.data[0].id);
         } else {
           setError('No video available.');
           setLoading(false);
