@@ -68,8 +68,11 @@ export async function transcodeToHls(
     const args = [
       '-y',
       '-i', inputPath,
-      '-c:v', 'libx264', '-profile:v', 'main', '-crf', '23', '-preset', 'ultrafast',
+      '-vf', 'scale=-2:720',
+      '-c:v', 'libx264', '-profile:v', 'main', '-crf', '28', '-preset', 'ultrafast',
       '-c:a', 'aac', '-b:a', '128k',
+      '-threads', '1',
+      '-max_muxing_queue_size', '1024',
       // Align keyframes to segment boundaries so each 6s segment starts cleanly.
       '-force_key_frames', `expr:gte(t,n_forced*${SEGMENT_DURATION})`,
       '-hls_time', String(SEGMENT_DURATION),
