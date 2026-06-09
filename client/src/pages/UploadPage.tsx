@@ -130,7 +130,7 @@ export default function UploadPage() {
                 <p className="text-gray-500 font-mono text-xs mt-0.5 truncate">{success.video.filename}</p>
               </div>
               <Link
-                to={`/player/${success.video.filename}`}
+                to="/"
                 className="brutal-btn text-sm shrink-0"
                 style={{ padding: '0.4rem 0.75rem' }}
               >
