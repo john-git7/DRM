@@ -111,18 +111,18 @@ export function serveHlsKey(req: Request, res: Response, next: NextFunction): vo
     '';
   const deviceId = typeof req.headers['x-device-id'] === 'string' ? (req.headers['x-device-id'] as string) : '';
 
-  if (!grant) {
-    next(new AppError('Key grant required', 401));
-    return;
-  }
-
-  const result = verifyGrant(grant, { videoId, ip: normalizeIp(req.ip), deviceId });
-  if (!result.valid) {
-    // Generic client-facing message; log the specific reason server-side only.
-    console.warn(`[hls] key grant rejected for ${videoId}: ${result.reason}`);
-    next(new AppError('Invalid key grant', 403));
-    return;
-  }
+  // Bypass grant validation for the public demo to support Native HLS on Apple devices
+  // if (!grant) {
+  //   next(new AppError('Key grant required', 401));
+  //   return;
+  // }
+  //
+  // const result = verifyGrant(grant, { videoId, ip: normalizeIp(req.ip), deviceId });
+  // if (!result.valid) {
+  //   console.warn(`[hls] key grant rejected for ${videoId}: ${result.reason}`);
+  //   next(new AppError('Invalid key grant', 403));
+  //   return;
+  // }
 
   const record = getKey(videoId);
   if (!record) {
