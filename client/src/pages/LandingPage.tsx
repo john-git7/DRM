@@ -66,9 +66,21 @@ export default function LandingPage() {
       setDeviceId(fingerprint);
       const deviceId = fingerprint;
 
-      // Bypass agent check for the demo so it plays on mobile devices
-      const agentStatus: AgentStatus = { state: 'clean', threats: [] };
+      const agentStatus = await checkAgent();
       setAgent(agentStatus);
+      const threatLabels = agentStatus.threats.map((t: AgentThreat) => `${t.category}: ${t.name}`);
+      sendAudit({
+        event: 'agent-check',
+        videoId: current.filename,
+        deviceId,
+        agentStatus: agentStatus.state,
+        recorders: threatLabels,
+      });
+
+      if (agentStatus.state !== 'clean') {
+        sendAudit({ event: 'playback-blocked', videoId: current.filename, deviceId, agentStatus: agentStatus.state, recorders: threatLabels });
+        return;
+      }
 
       const grantRes = await apiClient.post<{ grant: string; ttl: number }>(
         `/hls/${current.filename}/key-grant`,
@@ -146,8 +158,7 @@ export default function LandingPage() {
     let timerId: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
-      // Bypass agent heartbeat for demo
-      const status: AgentStatus = { state: 'clean', threats: [] };
+      const status = await checkAgent();
       if (status.state !== 'clean') {
         setAgent(status);
         sendAudit({ event: 'playback-blocked', videoId: filename, deviceId: deviceIdRef.current ?? undefined, agentStatus: status.state, recorders: status.threats.map((t: AgentThreat) => `${t.category}: ${t.name}`) });
