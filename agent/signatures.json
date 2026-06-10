@@ -536,7 +536,8 @@
     "match": [
      "snippingtool",
      "snipping tool"
-    ]
+    ],
+    "active_only": ["screenclippinghost", "screenclip"]
    },
    {
     "name": "Windows Snip & Sketch",
@@ -971,8 +972,6 @@
    "bpconcjcammlapcogcnnelfmaeghhagj": "Nimbus Screenshot & Recorder"
   },
   "keywords": [
-   "video download",
-   "video downloader",
    "downloadhelper",
    "download helper",
    "stream record",

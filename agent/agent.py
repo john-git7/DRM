@@ -105,7 +105,7 @@ DEFAULT_SIGNATURES = {
             {"name": "Dxtory", "match": ["dxtory"]},
         ],
         "Snipping / screenshot tool": [
-            {"name": "Windows Snipping Tool", "match": ["snippingtool", "screensketch", "screenclip"]},
+            {"name": "Windows Snipping Tool", "match": ["snippingtool", "screensketch", "screenclip"], "active_only": ["screenclippinghost", "screenclip"]},
         ],
         "Video downloader": [
             {"name": "yt-dlp / youtube-dl", "match": ["yt-dlp", "youtube-dl"]},
@@ -113,7 +113,7 @@ DEFAULT_SIGNATURES = {
         ],
     },
     "captureDeviceKeywords": ["elgato", "avermedia", "magewell", "blackmagic", "capture card", "usb capture"],
-    "extensions": {"ids": {}, "keywords": ["video download", "screen record", "stream record", "capture"]},
+    "extensions": {"ids": {}, "keywords": ["screen record", "stream record", "capture"]},
 }
 
 
