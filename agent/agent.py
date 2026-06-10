@@ -1017,18 +1017,17 @@ class AgentHandler(BaseHTTPRequestHandler):
     server_version = "ArqxAtlasAgent/" + VERSION
 
     def _resolved_origin(self):
-        # Echo the configured origin, or ANY localhost/127.0.0.1 origin (any port) —
-        # the player's dev port varies (5173/5174/5180…), and this agent is
-        # localhost-only and serves only status, so reflecting localhost is safe.
         request_origin = self.headers.get("Origin")
-        if request_origin and (request_origin == AGENT_ALLOWED_ORIGIN or _is_localhost_origin(request_origin)):
+        allowed = ["http://localhost:5173", "https://drm-client.vercel.app"]
+        if request_origin and (request_origin in allowed or _is_localhost_origin(request_origin)):
             return request_origin
-        return AGENT_ALLOWED_ORIGIN
+        return "https://drm-client.vercel.app"
 
     def _cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", self._resolved_origin())
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.send_header("Cache-Control", "no-store")
 
     def _send_json(self, status, payload):
@@ -1041,7 +1040,7 @@ class AgentHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self):  # noqa: N802
-        self.send_response(204)
+        self.send_response(200)
         self._cors_headers()
         self.send_header("Content-Length", "0")
         self.end_headers()
@@ -1055,7 +1054,11 @@ class AgentHandler(BaseHTTPRequestHandler):
             try:
                 self._send_json(200, build_status())
             except Exception as exc:  # noqa: BLE001 - status must never 500
-                print("[error] status build failed ({})".format(exc), file=sys.stderr)
+                if sys.stderr:
+                    try:
+                        print("[error] status build failed ({})".format(exc), file=sys.stderr)
+                    except Exception:
+                        pass
                 self._send_json(200, {"installed": True, "version": VERSION, "brand": BRAND,
                                       "platform": normalize_platform(), "recorders": [], "downloaders": [],
                                       "captureDevices": [], "extensions": [], "threats": [], "clean": True,
@@ -1064,7 +1067,11 @@ class AgentHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "not found"})
 
     def log_message(self, fmt, *args):  # noqa: A002
-        sys.stderr.write("[req] %s - %s\n" % (self.address_string(), fmt % args))
+        if sys.stderr:
+            try:
+                sys.stderr.write("[req] %s - %s\n" % (self.address_string(), fmt % args))
+            except Exception:
+                pass
 
 
 def _signature_count():
