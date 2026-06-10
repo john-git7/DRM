@@ -237,11 +237,11 @@ export default function LandingPage() {
         </span>
       </div>
 
-      {(agent.state === 'threat' || screenCaptureActive) && (
+      {screenCaptureActive && (
         <CaptureBlackout identity="Guest User" threats={agent.threats} onRetry={retry} />
       )}
 
-      {agent.state === 'not-installed' || agent.state === 'error' ? (
+      {agent.state === 'not-installed' || agent.state === 'error' || agent.state === 'threat' ? (
         <AgentBlock agent={agent} onRetry={runInitialAgentCheck} />
       ) : loading || preparing ? (
         <div className="space-y-4">
