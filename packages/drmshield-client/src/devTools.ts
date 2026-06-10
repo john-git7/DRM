@@ -2,6 +2,8 @@ import type { DevToolsStatus } from './types.js';
 
 const POLL_INTERVAL_MS = 500;
 const DIMENSION_THRESHOLD_PX = 100;
+const SIDEBAR_DIMENSION_THRESHOLD_PX = 160;
+const DOCKED_HEIGHT_THRESHOLD_PX = 260;
 
 function detect(): DevToolsStatus {
   const outerW = window.outerWidth;
@@ -24,7 +26,12 @@ function detect(): DevToolsStatus {
     window.matchMedia('(pointer: coarse)').matches;
 
   const dimensionsTriggered =
-    !isMobile && (cssDiffW > DIMENSION_THRESHOLD_PX || cssDiffH > DIMENSION_THRESHOLD_PX);
+    !isMobile &&
+    (
+      cssDiffW > SIDEBAR_DIMENSION_THRESHOLD_PX ||
+      cssDiffH > DOCKED_HEIGHT_THRESHOLD_PX ||
+      (cssDiffW > DIMENSION_THRESHOLD_PX && cssDiffH > DIMENSION_THRESHOLD_PX)
+    );
 
   // Debugger timing trap: open DevTools pauses this statement, making elapsed > 100ms.
   let consoleHookTriggered = false;
