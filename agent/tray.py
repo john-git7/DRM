@@ -33,16 +33,6 @@ def _resource(name):
 ICON_PATH = _resource("arqx-logo.png")
 
 
-def _serve():
-    """Serve the agent API, or quietly reuse one already running on the port."""
-    try:
-        httpd = ThreadingHTTPServer((agent.AGENT_HOST, agent.AGENT_PORT), agent.AgentHandler)
-    except OSError:
-        print("[tray] an agent is already running on :%d — reusing it" % agent.AGENT_PORT)
-        return
-    httpd.serve_forever()
-
-
 def main():
     try:
         import pystray
@@ -52,10 +42,20 @@ def main():
             "The tray needs pystray + Pillow:\n    pip install pystray pillow\n"
             "Running headless instead (no tray icon).\n"
         )
-        _serve()
+        try:
+            httpd = agent.AgentServer((agent.AGENT_HOST, agent.AGENT_PORT), agent.AgentHandler)
+            httpd.serve_forever()
+        except OSError:
+            print("[tray] an agent is already running on :%d — reusing it" % agent.AGENT_PORT)
         return
 
-    threading.Thread(target=_serve, daemon=True).start()
+    try:
+        httpd = agent.AgentServer((agent.AGENT_HOST, agent.AGENT_PORT), agent.AgentHandler)
+    except OSError:
+        print("[tray] Agent already running on :%d, not creating duplicate tray icon." % agent.AGENT_PORT)
+        sys.exit(0)
+
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
     image = Image.open(ICON_PATH) if os.path.exists(ICON_PATH) else Image.new("RGBA", (64, 64), (124, 58, 237, 255))
     port = agent.AGENT_PORT

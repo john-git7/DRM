@@ -44,7 +44,7 @@ Edit `server/.env` and fill in every value. Generate the two secrets with:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+```node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ```env
 JWT_SECRET=<paste a generated value>

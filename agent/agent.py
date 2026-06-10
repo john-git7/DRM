@@ -56,6 +56,14 @@ import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# Hide subprocess console windows on Windows (prevents flickering cmd/powershell popups)
+if platform.system() == "Windows":
+    _original_check_output = subprocess.check_output
+    def _hidden_check_output(*args, **kwargs):
+        kwargs.setdefault("creationflags", 0x08000000)
+        return _original_check_output(*args, **kwargs)
+    subprocess.check_output = _hidden_check_output
+
 VERSION = "2.0.0"
 BRAND = "ARQX Atlas"
 
@@ -996,6 +1004,8 @@ def kill_all_instances():
 # --- HTTP server -------------------------------------------------------------
 
 class AgentServer(ThreadingHTTPServer):
+    allow_reuse_address = False  # Crucial on Windows: prevents multiple agents from binding the same port!
+
     def handle_error(self, request, client_address):
         exc = sys.exc_info()[1]
         if isinstance(exc, (ConnectionAbortedError, BrokenPipeError, ConnectionResetError)):

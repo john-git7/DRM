@@ -36,6 +36,16 @@ export default function LandingPage() {
   const [deviceId, setDeviceId] = useState('');
   const auditedDevTools = useRef(false);
 
+  // Initial Agent Check
+  const runInitialAgentCheck = useCallback(async () => {
+    const status = await checkAgent();
+    setAgent(status);
+  }, []);
+
+  useEffect(() => {
+    runInitialAgentCheck();
+  }, [runInitialAgentCheck]);
+
   // Fetch the first available video
   useEffect(() => {
     let cancelled = false;
@@ -231,7 +241,9 @@ export default function LandingPage() {
         <CaptureBlackout identity="Guest User" threats={agent.threats} onRetry={retry} />
       )}
 
-      {loading || preparing ? (
+      {agent.state === 'not-installed' || agent.state === 'error' ? (
+        <AgentBlock agent={agent} onRetry={runInitialAgentCheck} />
+      ) : loading || preparing ? (
         <div className="space-y-4">
           <div className="aspect-video w-full bg-[#111] border-2 border-white/10 animate-pulse flex items-center justify-center">
             <div className="flex items-center gap-3 text-gray-500 font-mono text-xs uppercase tracking-widest">
@@ -265,9 +277,7 @@ export default function LandingPage() {
               keyboardProtectEnabled={keyboardProtectEnabled}
               forensicWatermarkEnabled={forensicWatermarkEnabled}
             />
-          ) : (
-            <AgentBlock agent={agent} onRetry={retry} />
-          )}
+          ) : null}
           <div className="text-center mt-6">
             <h1 className="text-2xl font-black text-white uppercase tracking-wide mb-2">{video.title}</h1>
             <p className="text-gray-400 font-mono text-sm">Protected by Military-Grade DRM Encryption</p>
@@ -365,6 +375,17 @@ function AgentBlock({ agent, onRetry }: { agent: AgentStatus; onRetry: () => voi
             </li>
           ))}
         </ul>
+      )}
+      {notInstalled && (
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-center">
+          <a href="/downloads/arqx-atlas-agent-setup.exe" download className="bg-[#f59e0b] hover:bg-[#d97706] text-black font-bold py-3 px-6 uppercase tracking-wider text-sm flex items-center gap-2 transition-colors">
+            <Download className="w-5 h-5" />
+            Download Agent
+          </a>
+          <a href="arqx://start" className="bg-transparent border-2 border-white/20 hover:border-white/50 text-white font-bold py-3 px-6 uppercase tracking-wider text-sm transition-colors">
+            Launch Installed Agent
+          </a>
+        </div>
       )}
       <button onClick={onRetry} className="brutal-btn">Retry Check</button>
     </div>

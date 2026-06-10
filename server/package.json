@@ -4,6 +4,7 @@
   "description": "Secure Video Player Prototype Backend",
   "main": "dist/server.js",
   "scripts": {
+    "predev": "pnpm --filter @drmshield/server build",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"

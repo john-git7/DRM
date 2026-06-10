@@ -11,7 +11,7 @@ block_cipher = None
 AGENT_DIR = os.path.abspath(os.path.join(os.getcwd()))
 
 a = Analysis(
-    ['../agent.py'],
+    ['../tray.py'],
     pathex=[AGENT_DIR],
     binaries=[],
     datas=[('../signatures.json', '.'), ('../arqx-logo.png', '.')],
@@ -26,6 +26,6 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz, a.scripts, a.binaries, a.zipfiles, a.datas, [],
     name='arqx-atlas-agent',
-    debug=False, strip=False, upx=True, console=True,
+    debug=False, strip=False, upx=True, console=False,
     icon='arqx.ico' if os.path.exists('arqx.ico') else None,
 )

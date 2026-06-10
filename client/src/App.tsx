@@ -31,6 +31,7 @@ function AppShell() {
   const [windowFocused, setWindowFocused] = useState(true);
   const devToolsStatus = useDevTools();
   const { devToolsDetectEnabled, focusLossDetectEnabled } = useSecurity();
+  const shouldBlockDevTools = !import.meta.env.DEV && devToolsDetectEnabled && devToolsStatus.isOpen;
 
   // Native (Capacitor) builds only
   useEffect(() => { void enableScreenProtection(); }, []);
@@ -51,7 +52,7 @@ function AppShell() {
     };
   }, []);
 
-  if (devToolsDetectEnabled && devToolsStatus.isOpen) {
+  if (shouldBlockDevTools) {
     return <div className="w-screen h-screen bg-black flex items-center justify-center text-white font-mono uppercase">DevTools Detected - Access Blocked</div>;
   }
 
