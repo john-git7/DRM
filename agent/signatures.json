@@ -536,8 +536,7 @@
     "match": [
      "snippingtool",
      "snipping tool"
-    ],
-    "active_only": ["screenclippinghost", "screenclip"]
+    ]
    },
    {
     "name": "Windows Snip & Sketch",

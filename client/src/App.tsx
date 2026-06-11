@@ -12,8 +12,10 @@ function Footer() {
     <footer className="border-t-2 border-white/10 py-6 flex flex-col items-center gap-2.5">
       <div className="flex items-center gap-2">
         <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">Built by</span>
-        <img src="/arqx-logo.png" alt="ARQX" className="h-4 w-auto" />
-        <span className="text-[11px] text-gray-300 font-mono uppercase tracking-[0.2em] font-black">Atlas</span>
+        <a href="https://www.arqx.io/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <img src="/arqx-logo.png" alt="ARQX" className="h-4 w-auto" />
+          <span className="text-[11px] text-gray-300 font-mono uppercase tracking-[0.2em] font-black">Atlas</span>
+        </a>
       </div>
       <div className="flex items-center gap-4 mt-2">
         <span className="text-[11px] text-gray-600 font-mono uppercase tracking-widest">
@@ -64,6 +66,7 @@ function AppShell() {
         <main className="flex-grow container mx-auto px-4 md:px-8 py-8">
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/player/:id" element={<LandingPage />} />
             <Route path="/admin" element={<AdminDashboardPage />} />
             <Route path="*" element={
               <div className="text-center py-24">

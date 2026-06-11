@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Loader2, MonitorX, Download } from 'lucide-react';
 import apiClient from '../utils/apiClient';
 import VideoPlayer from '../components/VideoPlayer';
@@ -46,13 +47,23 @@ export default function LandingPage() {
     runInitialAgentCheck();
   }, [runInitialAgentCheck]);
 
+  const { id } = useParams();
+
   // Fetch the first available video
   useEffect(() => {
     let cancelled = false;
     apiClient.get<Video[]>('/videos')
       .then((res) => {
         if (cancelled) return;
-        if (res.data.length > 0) {
+        if (id) {
+          const found = res.data.find(v => v.id === id);
+          if (found) {
+            setFilename(found.id);
+          } else {
+            setError('Video not found.');
+            setLoading(false);
+          }
+        } else if (res.data.length > 0) {
           setFilename(res.data[0].id);
         } else {
           setError('No video available.');
@@ -167,17 +178,26 @@ export default function LandingPage() {
 
     let timerId: ReturnType<typeof setTimeout> | null = null;
 
+    let activePoll = false;
+
     const poll = async () => {
-      const status = await checkAgent();
-      if (status.state !== 'clean') {
-        setAgent(status);
-        sendAudit({ event: 'playback-blocked', videoId: filename, deviceId: deviceIdRef.current ?? undefined, agentStatus: status.state, recorders: status.threats.map((t: AgentThreat) => `${t.category}: ${t.name}`) });
-        return;
+      if (activePoll) return;
+      activePoll = true;
+      try {
+        const status = await checkAgent();
+        if (status.state !== 'clean') {
+          setAgent(status);
+          sendAudit({ event: 'playback-blocked', videoId: filename, deviceId: deviceIdRef.current ?? undefined, agentStatus: status.state, recorders: status.threats.map((t: AgentThreat) => `${t.category}: ${t.name}`) });
+          return;
+        }
+      } finally {
+        activePoll = false;
       }
       timerId = setTimeout(poll, 1500 + Math.random() * 2500);
     };
 
     const fireNow = () => {
+      if (activePoll) return;
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       void poll();
     };
@@ -228,31 +248,39 @@ export default function LandingPage() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* Header for Landing Page */}
-      <div className="flex items-center justify-center gap-3 mb-10 mt-4">
-        <div className="p-3 bg-[#7c3aed] border-2 border-white" style={{ boxShadow: '4px 4px 0px #fff' }}>
-          <ShieldCheck className="w-8 h-8 text-white" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 mt-4">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-[#7c3aed] border-2 border-white" style={{ boxShadow: '4px 4px 0px #fff' }}>
+            <ShieldCheck className="w-8 h-8 text-white" />
+          </div>
+          <span className="font-mono text-3xl font-black tracking-tight text-white uppercase">
+            DRM<span className="text-[#7c3aed]">Shield</span>
+          </span>
         </div>
-        <span className="font-mono text-3xl font-black tracking-tight text-white uppercase">
-          DRM<span className="text-[#7c3aed]">Shield</span>
-        </span>
+        <div className="flex items-center gap-2 px-3 py-1.5 border-2 border-white/10 bg-[#111] font-mono text-xs uppercase tracking-wider self-start sm:self-auto">
+           <div className={`w-2 h-2 rounded-full ${agent.state === 'clean' ? 'bg-[#22c55e] animate-pulse' : agent.state === 'checking' ? 'bg-[#f59e0b] animate-pulse' : 'bg-[#ef4444]'}`} />
+           <span className={agent.state === 'clean' ? 'text-[#22c55e]' : agent.state === 'checking' ? 'text-[#f59e0b]' : 'text-[#ef4444]'}>
+             {agent.state === 'clean' ? 'Agent Active' : agent.state === 'checking' ? 'Checking Agent...' : 'Agent Offline'}
+           </span>
+        </div>
       </div>
 
       {screenCaptureActive && (
         <CaptureBlackout identity="Guest User" threats={agent.threats} onRetry={retry} />
       )}
 
-      {agent.state === 'not-installed' || agent.state === 'error' || agent.state === 'threat' ? (
-        <AgentBlock agent={agent} onRetry={runInitialAgentCheck} />
-      ) : loading || preparing ? (
+      {loading || preparing ? (
         <div className="space-y-4">
           <div className="aspect-video w-full bg-[#111] border-2 border-white/10 animate-pulse flex items-center justify-center">
             <div className="flex items-center gap-3 text-gray-500 font-mono text-xs uppercase tracking-widest">
               <Loader2 className="w-5 h-5 animate-spin" />
-              {preparing ? 'Authorizing secure playback…' : 'Loading…'}
+              {preparing ? 'Checking agent status…' : 'Loading…'}
             </div>
           </div>
           <div className="h-6 bg-white/10 w-1/3 animate-pulse mx-auto" />
         </div>
+      ) : agent.state === 'not-installed' || agent.state === 'error' || agent.state === 'threat' ? (
+        <AgentBlock agent={agent} onRetry={retry} />
       ) : error ? (
         <div className="brutal-card-danger p-10 max-w-xl mx-auto text-center">
           <AlertCircle className="w-12 h-12 text-[#ef4444] mx-auto mb-4" />
@@ -333,7 +361,7 @@ function CaptureBlackout({ identity, threats, onRetry }: { identity: string; thr
       <MonitorX className="w-16 h-16 text-[#ef4444] mb-5" />
       <h1 className="text-2xl font-black text-white uppercase tracking-widest mb-2">Screen Capture Blocked</h1>
       <p className="text-gray-400 text-sm font-mono max-w-md mb-5">
-        A capture tool or recorder was detected. Playback is blacked out, and this session is logged to <span className="text-gray-200">{identity}</span>.
+        Playback is blocked while a capture tool or downloader is active. Close the application from your Taskbar or use Task Manager (Ctrl+Shift+Esc), then click Retry.
       </p>
       {threats.length > 0 && (
         <ul className="mb-6 text-xs font-mono text-left max-w-md w-full space-y-1">
@@ -353,17 +381,23 @@ function CaptureBlackout({ identity, threats, onRetry }: { identity: string; thr
 function AgentBlock({ agent, onRetry }: { agent: AgentStatus; onRetry: () => void }) {
   const notInstalled = agent.state === 'not-installed';
   const threat = agent.state === 'threat';
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const [launchStatus, setLaunchStatus] = useState<'idle' | 'launching' | 'launched'>('idle');
+  const [downloaded, setDownloaded] = useState(false);
+
   return (
     <div className="aspect-video w-full bg-black border-2 border-[#ef4444] flex flex-col items-center justify-center text-center px-6 overflow-y-auto" style={{ boxShadow: '6px 6px 0px #ef4444' }}>
-      {notInstalled ? <Download className="w-12 h-12 text-[#f59e0b] mb-4" /> : <MonitorX className="w-12 h-12 text-[#ef4444] mb-4" />}
+      {notInstalled && !isMobile ? <Download className="w-12 h-12 text-[#f59e0b] mb-4" /> : <MonitorX className="w-12 h-12 text-[#ef4444] mb-4" />}
       <p className="font-black text-lg uppercase tracking-wide mb-2 text-white">
-        {notInstalled ? 'Security Agent Required' : threat ? 'Capture Threat Detected' : 'Agent Check Failed'}
+        {notInstalled ? (isMobile ? 'Mobile App Required' : 'Security Agent Required') : threat ? 'Capture Threat Detected' : 'Agent Check Failed'}
       </p>
       <p className="text-gray-400 text-sm font-mono mb-4 max-w-md">
         {notInstalled
-          ? 'The security agent must be running to watch protected content. Start the localhost agent, then retry.'
+          ? (isMobile 
+              ? 'Secure playback is not supported in mobile browsers. Please download our native iOS or Android app to watch this encrypted video.' 
+              : 'The security agent must be running to watch protected content. Start the localhost agent, then retry.')
           : threat
-            ? 'Playback is blocked while a capture tool, downloader, or capture device is active. Close or remove it, then retry.'
+            ? 'Playback is blocked while a capture tool or downloader is active. Close the application from your Taskbar or use Task Manager (Ctrl+Shift+Esc), then click Retry.'
             : 'The security agent returned an unexpected response. Retry to check again.'}
       </p>
       {threat && agent.threats.length > 0 && (
@@ -376,18 +410,62 @@ function AgentBlock({ agent, onRetry }: { agent: AgentStatus; onRetry: () => voi
           ))}
         </ul>
       )}
-      {notInstalled && (
+      
+      {notInstalled && !isMobile && downloaded && launchStatus !== 'launched' && (
+        <div className="mb-6 p-4 bg-[#f59e0b]/10 border border-[#f59e0b]/30 text-left max-w-md w-full">
+          <p className="text-[#f59e0b] font-bold uppercase tracking-wider text-xs mb-2">Installation Steps:</p>
+          <ol className="text-gray-300 text-sm font-mono list-decimal pl-5 space-y-1">
+            <li>Open the downloaded <span className="text-white">arqx-atlas-agent-setup.exe</span></li>
+            <li>Follow the Windows installation prompts</li>
+            <li>Click <strong>Launch Installed Agent</strong> below</li>
+          </ol>
+        </div>
+      )}
+
+      {notInstalled && !isMobile && launchStatus !== 'launched' && (
         <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-center">
-          <a href="/downloads/arqx-atlas-agent-setup.exe" download className="bg-[#f59e0b] hover:bg-[#d97706] text-black font-bold py-3 px-6 uppercase tracking-wider text-sm flex items-center gap-2 transition-colors">
+          <a 
+            href="/downloads/arqx-atlas-agent-setup.exe" 
+            download 
+            onClick={() => setDownloaded(true)}
+            className="bg-[#f59e0b] hover:bg-[#d97706] text-black font-bold py-3 px-6 uppercase tracking-wider text-sm flex items-center gap-2 transition-colors"
+          >
             <Download className="w-5 h-5" />
             Download Agent
           </a>
-          <a href="arqx://start" className="bg-transparent border-2 border-white/20 hover:border-white/50 text-white font-bold py-3 px-6 uppercase tracking-wider text-sm transition-colors">
-            Launch Installed Agent
+          <a 
+            href="arqx://start" 
+            onClick={() => {
+              setLaunchStatus('launching');
+              setTimeout(() => setLaunchStatus('launched'), 3000);
+            }}
+            className="bg-transparent border-2 border-white/20 hover:border-white/50 text-white font-bold py-3 px-6 uppercase tracking-wider text-sm transition-colors"
+          >
+            {launchStatus === 'launching' ? 'Launching...' : 'Launch Installed Agent'}
           </a>
         </div>
       )}
-      <button onClick={onRetry} className="brutal-btn">Retry Check</button>
+      {notInstalled && !isMobile && launchStatus === 'launched' && (
+        <div className="mb-6 flex flex-col items-center justify-center">
+          <p className="text-[#22c55e] font-bold uppercase tracking-wider mb-4 text-sm">Agent Launched Successfully!</p>
+          <button onClick={onRetry} className="brutal-btn w-full max-w-xs">
+            Retry Connection
+          </button>
+        </div>
+      )}
+      {notInstalled && isMobile && (
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-center">
+          <button disabled className="bg-gray-700 text-gray-400 font-bold py-3 px-6 uppercase tracking-wider text-sm flex items-center gap-2 cursor-not-allowed">
+            App Store (Demo)
+          </button>
+          <button disabled className="bg-gray-700 text-gray-400 font-bold py-3 px-6 uppercase tracking-wider text-sm flex items-center gap-2 cursor-not-allowed">
+            Google Play (Demo)
+          </button>
+        </div>
+      )}
+      {!isMobile && !notInstalled && (
+        <button onClick={onRetry} className="brutal-btn mt-4">Retry Check</button>
+      )}
     </div>
   );
 }

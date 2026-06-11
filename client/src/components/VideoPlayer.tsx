@@ -252,8 +252,8 @@ export default function VideoPlayer({
     <div
       ref={containerRef}
       onMouseMove={() => setShowControls(true)}
-      className="relative w-full aspect-video overflow-hidden bg-black select-none border-2 border-white"
-      style={{ boxShadow: '6px 6px 0px #7c3aed' }}
+      className={`relative w-full aspect-video overflow-hidden bg-black select-none ${isFullscreen ? '' : 'border-2 border-white'}`}
+      style={isFullscreen ? {} : { boxShadow: '6px 6px 0px #7c3aed' }}
     >
       <video
         ref={videoRef}

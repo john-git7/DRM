@@ -60,10 +60,6 @@ export default function LibraryPage() {
             Protected media streams — click any card to launch encrypted player
           </p>
         </div>
-        <Link to="/upload" className="brutal-btn self-start md:self-auto">
-          <Play className="w-4 h-4" />
-          Upload New Video
-        </Link>
       </div>
 
       {/* Content */}
@@ -97,9 +93,9 @@ export default function LibraryPage() {
           <p className="text-gray-500 text-sm font-mono mb-8 max-w-xs mx-auto">
             Upload your first MP4 video to begin streaming securely.
           </p>
-          <Link to="/upload" className="brutal-btn">
+          <a href="#upload-section" className="brutal-btn">
             Upload Now
-          </Link>
+          </a>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

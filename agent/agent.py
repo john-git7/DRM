@@ -64,6 +64,12 @@ if platform.system() == "Windows":
         return _original_check_output(*args, **kwargs)
     subprocess.check_output = _hidden_check_output
 
+    _original_run = subprocess.run
+    def _hidden_run(*args, **kwargs):
+        kwargs.setdefault("creationflags", 0x08000000)
+        return _original_run(*args, **kwargs)
+    subprocess.run = _hidden_run
+
 VERSION = "2.0.0"
 BRAND = "ARQX Atlas"
 
@@ -969,7 +975,8 @@ def _proc_cmdlines():
               "ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }")
         try:
             out = subprocess.check_output(["powershell", "-NoProfile", "-Command", ps],
-                                          text=True, timeout=15)
+                                          text=True, timeout=15,
+                                          creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000))
         except Exception:
             return
         for line in out.splitlines():
@@ -993,7 +1000,8 @@ def kill_all_instances():
         try:
             if platform.system() == "Windows":
                 subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8,
+                               creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000))
             else:
                 os.kill(pid, signal.SIGTERM)
         except Exception:
@@ -1050,7 +1058,50 @@ class AgentHandler(BaseHTTPRequestHandler):
         if path == "/health":
             self._send_json(200, {"ok": True, "brand": BRAND, "version": VERSION})
             return
-        if path == "/status":
+        if path == "/status" or path == "/":
+            if "text/html" in self.headers.get("Accept", ""):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                try:
+                    status = build_status()
+                except Exception:
+                    status = {"installed": True, "version": VERSION, "brand": BRAND, "clean": True, "threats": []}
+                
+                is_clean = status.get("clean", False)
+                threats = status.get("threats", [])
+                
+                html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>ARQX Atlas | Status</title>
+    <style>
+        body {{ background: black; color: white; font-family: monospace; padding: 40px; }}
+        .container {{ max-width: 600px; margin: 0 auto; border: 2px solid #f59e0b; padding: 20px; box-shadow: 6px 6px 0px #f59e0b; }}
+        h1 {{ text-transform: uppercase; margin-top: 0; color: #f59e0b; }}
+        .status-box {{ padding: 20px; border: 2px solid {"#22c55e" if is_clean else "#ef4444"}; background: {"rgba(34,197,94,0.1)" if is_clean else "rgba(239,68,68,0.1)"}; }}
+        .threat-list {{ list-style-type: none; padding: 0; }}
+        .threat-item {{ background: rgba(239,68,68,0.2); padding: 10px; margin-bottom: 5px; border-left: 4px solid #ef4444; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ARQX Atlas Agent</h1>
+        <p>Version: {VERSION}</p>
+        <p>Platform: {status.get('platform', 'unknown')}</p>
+        
+        <div class="status-box">
+            <h2>{'✅ SYSTEM SECURE' if is_clean else '❌ THREAT DETECTED'}</h2>
+            <p>{'No capture tools detected. You are ready to stream protected content.' if is_clean else 'Playback blocked. Please close the following applications:'}</p>
+            
+            {'' if is_clean else '<ul class="threat-list">' + ''.join(f'<li class="threat-item"><strong>{t.get("category", "Threat")}</strong>: {t.get("name", "Unknown Process")}</li>' for t in threats) + '</ul>'}
+        </div>
+    </div>
+</body>
+</html>"""
+                self.wfile.write(html.encode('utf-8'))
+                return
+
             try:
                 self._send_json(200, build_status())
             except Exception as exc:  # noqa: BLE001 - status must never 500

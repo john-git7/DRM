@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 $AgentDir = Split-Path -Parent $PSScriptRoot
 
 Write-Host "Building arqx-atlas-agent.exe with PyInstaller..."
-pyinstaller "$PSScriptRoot/agent.spec" --distpath "$AgentDir/dist" --workpath "$AgentDir/build" --noconfirm
+python -m PyInstaller "$PSScriptRoot/agent.spec" --distpath "$AgentDir/dist" --workpath "$AgentDir/build" --noconfirm
 
 $Exe = Join-Path $AgentDir "dist/arqx-atlas-agent.exe"
 if (-not (Test-Path $Exe)) { throw "PyInstaller did not produce $Exe" }

@@ -104,7 +104,7 @@ export default function UploadPage() {
           <h1 className="text-3xl font-black tracking-tight text-white uppercase">Upload Content</h1>
         </div>
         <p className="text-gray-500 text-sm font-mono ml-14">
-          MP4 files only — max 500MB — streamed through secure proxy
+          MP4 files only — max 100MB — streamed through secure proxy
         </p>
       </div>
 
@@ -210,7 +210,7 @@ export default function UploadPage() {
                     <p className="text-white font-bold text-sm">
                       Drop MP4 here or <span className="text-[#a78bfa] underline underline-offset-2">browse</span>
                     </p>
-                    <p className="text-gray-600 text-xs mt-1 font-mono">Max 500MB</p>
+                    <p className="text-gray-600 text-xs mt-1 font-mono">Max 100MB</p>
                   </div>
                 </div>
               )}
