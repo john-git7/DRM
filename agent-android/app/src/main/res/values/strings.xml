@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DRMShield Agent</string>
+    <string name="status_running">Agent running — listening on 127.0.0.1:7891</string>
+    <string name="status_stopped">Agent stopped</string>
+    <string name="start_agent">Start protection</string>
+    <string name="stop_agent">Stop protection</string>
+    <string name="enable_notification_access">Enable live recording detection</string>
+    <string name="notif_hint">Live recording detection is optional. Grant Notification access so the agent can also detect an in-progress screen recording, not just installed recorder apps.</string>
+</resources>
