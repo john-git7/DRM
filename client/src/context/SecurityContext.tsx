@@ -5,6 +5,7 @@ interface SecurityConfig {
   rightClickProtectEnabled: boolean;
   keyboardProtectEnabled: boolean;
   forensicWatermarkEnabled: boolean;
+  visibleWatermarkEnabled: boolean;
   devToolsDetectEnabled: boolean;
 }
 
@@ -17,6 +18,7 @@ const defaultConfig: SecurityConfig = {
   rightClickProtectEnabled: true,
   keyboardProtectEnabled: true,
   forensicWatermarkEnabled: true,
+  visibleWatermarkEnabled: true,
   devToolsDetectEnabled: true,
 };
 

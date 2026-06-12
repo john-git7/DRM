@@ -1,0 +1,16 @@
+[
+  { "name": "AZ Screen Recorder", "packages": ["com.hecorat.screenrecorder.free"] },
+  { "name": "Mobizen Screen Recorder", "packages": ["com.rsupport.mvagent"] },
+  { "name": "DU Recorder", "packages": ["com.duapps.recorder"] },
+  { "name": "XRecorder (InShot)", "packages": ["com.xvideostudio.videoeditor", "videoeditor.videorecorder.screenrecorder"] },
+  { "name": "Screen Recorder - RecMe", "packages": ["recme.free.screenrecorder"] },
+  { "name": "ADV Screen Recorder", "packages": ["com.kkkapps.recorder.screenrecorder"] },
+  { "name": "Vidma Screen Recorder", "packages": ["screenrecorder.recorder.vidma"] },
+  { "name": "Super Screen Recorder", "packages": ["com.tianxingjian.screenshot"] },
+  { "name": "Screen Recorder Pro", "packages": ["com.nll.screenrecorder"] },
+  { "name": "Google Play Games (capture)", "packages": ["com.google.android.play.games"] },
+  { "name": "OBS / streaming relay", "packages": ["com.streamlabs", "tv.twitch.broadcast"] },
+  { "name": "AppsFactory Screen Recorder", "packages": ["com.appsfactory.screenrecorder"] },
+  { "name": "Loom", "packages": ["com.loom.android"] },
+  { "name": "Screencast / Mirroring relay", "packages": ["com.koushikdutta.cast", "de.twokit.screen.mirroring.castbrowser"] }
+]

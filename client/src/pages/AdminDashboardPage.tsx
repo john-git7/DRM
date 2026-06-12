@@ -29,6 +29,7 @@ export default function AdminDashboardPage() {
     rightClickProtectEnabled,
     keyboardProtectEnabled,
     forensicWatermarkEnabled,
+    visibleWatermarkEnabled,
     devToolsDetectEnabled,
     updateConfig,
   } = useSecurity();
@@ -85,6 +86,13 @@ export default function AdminDashboardPage() {
                   <span className="font-mono text-xs text-gray-300">Forensic Mark</span>
                 </div>
                 <ToggleSwitch enabled={forensicWatermarkEnabled} onChange={(v) => updateConfig('forensicWatermarkEnabled', v)} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Fingerprint className="w-4 h-4 text-gray-400" />
+                  <span className="font-mono text-xs text-gray-300">Visible Watermark</span>
+                </div>
+                <ToggleSwitch enabled={visibleWatermarkEnabled} onChange={(v) => updateConfig('visibleWatermarkEnabled', v)} />
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

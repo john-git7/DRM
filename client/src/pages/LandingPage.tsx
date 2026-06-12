@@ -11,12 +11,14 @@ import { getDeviceFingerprint } from '../utils/deviceFingerprint';
 import { checkAgent } from '../utils/agentCheck';
 import { sendAudit } from '../utils/audit';
 import { onCaptureEvent } from '../utils/mobileProtection';
+import { useAuth } from '../hooks/useAuth';
 import type { Video, AgentStatus, AgentThreat } from '../types';
 
 export default function LandingPage() {
   const [filename, setFilename] = useState<string | null>(null);
   const [video, setVideo] = useState<Video | null>(null);
   const [keyGrant, setKeyGrant] = useState<string | null>(null);
+  const [viewerIp, setViewerIp] = useState<string | undefined>(undefined);
   const [agent, setAgent] = useState<AgentStatus>({ state: 'checking', threats: [] });
   const [loading, setLoading] = useState(true);
   const [preparing, setPreparing] = useState(false);
@@ -25,11 +27,13 @@ export default function LandingPage() {
 
   const { 
     focusLossDetectEnabled, 
-    rightClickProtectEnabled, 
-    keyboardProtectEnabled, 
+    rightClickProtectEnabled,
+    keyboardProtectEnabled,
     forensicWatermarkEnabled,
-    devToolsDetectEnabled 
+    visibleWatermarkEnabled,
+    devToolsDetectEnabled
   } = useSecurity();
+  const { username } = useAuth();
 
   const devToolsStatus = useDevTools();
   const devToolsOpen = devToolsDetectEnabled && devToolsStatus.isOpen;
@@ -103,11 +107,12 @@ export default function LandingPage() {
         return;
       }
 
-      const grantRes = await apiClient.post<{ grant: string; ttl: number }>(
+      const grantRes = await apiClient.post<{ grant: string; ttl: number; ip?: string }>(
         `/hls/${current.filename}/key-grant`,
         { deviceId, agentStatus: agentStatus.state },
       );
       setKeyGrant(grantRes.data.grant);
+      setViewerIp(grantRes.data.ip);
       sendAudit({ event: 'playback-start', videoId: current.filename, deviceId, agentStatus: agentStatus.state });
     } catch (err) {
       console.error('Playback preparation failed:', err);
@@ -304,6 +309,9 @@ export default function LandingPage() {
               rightClickProtectEnabled={rightClickProtectEnabled}
               keyboardProtectEnabled={keyboardProtectEnabled}
               forensicWatermarkEnabled={forensicWatermarkEnabled}
+              visibleWatermarkEnabled={visibleWatermarkEnabled}
+              viewerIdentity={username ?? 'viewer'}
+              viewerIp={viewerIp}
             />
           ) : null}
           <div className="text-center mt-6">

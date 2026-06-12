@@ -39,8 +39,14 @@ export interface VideoPlayerProps {
   focusLossDetectEnabled?: boolean;
   rightClickProtectEnabled?: boolean;
   keyboardProtectEnabled?: boolean;
-  /** Faint per-user forensic overlay encoding identity across the frame. */
+  /** Intermittent faint QR (encrypted token) for covert leak tracing. */
   forensicWatermarkEnabled?: boolean;
+  /** Always-on visible per-session identity overlay (username · IP · device · time). */
+  visibleWatermarkEnabled?: boolean;
+  /** Viewer identity shown in the visible watermark (username from the JWT). */
+  viewerIdentity?: string;
+  /** Caller IP (from the key-grant response) shown in the visible watermark. */
+  viewerIp?: string;
 }
 
 export type AgentState = 'clean' | 'threat' | 'not-installed' | 'error' | 'checking';

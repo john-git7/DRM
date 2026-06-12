@@ -6,6 +6,7 @@ import { getKey } from '../services/keyService';
 import { getVideoByFilename } from '../services/videoService';
 import { isEnrolled } from '../services/enrollmentService';
 import { issueGrant, verifyGrant, normalizeIp } from '../services/keyGrantService';
+import { registerSession, isSessionCurrent } from '../services/sessionService';
 import { appendAudit } from '../services/auditService';
 import type { AuthenticatedRequest } from '../types/auth';
 import { AppError } from '../middleware/errorHandler';
@@ -63,7 +64,9 @@ export function serveHlsSegment(req: Request, res: Response, next: NextFunction)
  */
 export function issueKeyGrant(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
   const videoId = path.basename(req.params.videoId);
-  const username = 'demo-user';
+  // Identity comes from the verified JWT, not a hardcoded value, so grants,
+  // audit entries, and the single-session registry are all per real user.
+  const username = req.user?.username ?? 'demo-user';
 
   const { deviceId } = req.body as { deviceId?: string };
   if (!deviceId || typeof deviceId !== 'string' || deviceId.length < 8) {
@@ -85,6 +88,10 @@ export function issueKeyGrant(req: AuthenticatedRequest, res: Response, next: Ne
   const ip = normalizeIp(req.ip);
   const { grant, ttl } = issueGrant({ videoId, ip, deviceId, username });
 
+  // This device becomes the single active session for (user, video). Any other
+  // device that held the session is now superseded — note it in the audit log.
+  const { supersededDeviceId } = registerSession(username, videoId, deviceId);
+
   appendAudit({
     timestamp: new Date().toISOString(),
     username,
@@ -96,7 +103,21 @@ export function issueKeyGrant(req: AuthenticatedRequest, res: Response, next: Ne
     userAgent: req.headers['user-agent']
   });
 
-  res.status(200).json({ grant, ttl });
+  if (supersededDeviceId) {
+    appendAudit({
+      timestamp: new Date().toISOString(),
+      username,
+      ip,
+      event: 'session-superseded',
+      videoId,
+      deviceId: supersededDeviceId,
+      userAgent: req.headers['user-agent'],
+    });
+  }
+
+  // Return ip + username so the player can render them in the visible per-session
+  // forensic watermark (the client cannot otherwise observe its own public IP).
+  res.status(200).json({ grant, ttl, ip, username });
 }
 
 /**
@@ -126,6 +147,20 @@ export function serveHlsKey(req: Request, res: Response, next: NextFunction): vo
   //   next(new AppError('Invalid key grant', 403));
   //   return;
   // }
+
+  // Best-effort single-session enforcement. Only runs when a grant + device id
+  // are actually presented (the HLS.js path on desktop and Android Chrome). The
+  // grant is verified here purely to trust its embedded username/device claims;
+  // native HLS on Apple devices sends no device header and is left untouched,
+  // preserving the demo bypass above.
+  if (grant && deviceId) {
+    const result = verifyGrant(grant, { videoId, ip: normalizeIp(req.ip), deviceId });
+    if (result.valid && !isSessionCurrent(result.claims.username, videoId, deviceId)) {
+      console.warn(`[hls] key denied for ${videoId}: session moved to another device`);
+      next(new AppError('Playback session is active on another device', 409));
+      return;
+    }
+  }
 
   const record = getKey(videoId);
   if (!record) {
