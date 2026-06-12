@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useKeyboardProtection } from '../hooks/useKeyboardProtection';
 import apiClient from '../utils/apiClient';
+import ForensicOverlay from './ForensicOverlay';
 import type { VideoPlayerProps } from '../types';
 
 /**
@@ -36,6 +37,9 @@ export default function VideoPlayer({
   rightClickProtectEnabled = true,
   keyboardProtectEnabled = true,
   forensicWatermarkEnabled = true,
+  visibleWatermarkEnabled = true,
+  viewerIdentity = 'viewer',
+  viewerIp,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -278,6 +282,13 @@ export default function VideoPlayer({
           style={{ top: `${barTop}%`, left: `${barLeft}%`, width: `${BARCODE_PX}px`, height: `${BARCODE_PX}px`, opacity: BARCODE_OPACITY }}
           className="absolute z-20 pointer-events-none select-none"
         />
+      )}
+
+      {/* Always-on visible forensic watermark — burns viewer identity onto every
+          frame so a screen recording or off-screen capture is traceable. Hidden
+          only while the frame is already blanked (focus loss / DevTools). */}
+      {visibleWatermarkEnabled && !isFocusLost && !devToolsOpen && (
+        <ForensicOverlay identity={viewerIdentity} ip={viewerIp} deviceId={deviceId} />
       )}
 
       {/* Click shield */}
