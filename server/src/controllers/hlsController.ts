@@ -28,6 +28,7 @@ export function serveHlsPlaylist(req: Request, res: Response, next: NextFunction
   }
   res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   fs.createReadStream(file).pipe(res);
 }
 
@@ -47,6 +48,7 @@ export function serveHlsSegment(req: Request, res: Response, next: NextFunction)
     return;
   }
   res.setHeader('Content-Type', 'video/mp2t');
+  res.setHeader('Cache-Control', 'public, max-age=31536000');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   fs.createReadStream(file).pipe(res);
 }
