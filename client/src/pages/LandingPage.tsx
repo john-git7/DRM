@@ -432,15 +432,30 @@ function AgentBlock({ agent, onRetry }: { agent: AgentStatus; onRetry: () => voi
 
       {notInstalled && !isMobile && launchStatus !== 'launched' && (
         <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-center">
-          <a 
-            href="/downloads/arqx-atlas-agent-setup.exe" 
-            download 
-            onClick={() => setDownloaded(true)}
-            className="bg-[#f59e0b] hover:bg-[#d97706] text-black font-bold py-3 px-6 uppercase tracking-wider text-sm flex items-center gap-2 transition-colors"
-          >
-            <Download className="w-5 h-5" />
-            Download Agent
-          </a>
+          <div className="relative group">
+            <button className="bg-[#f59e0b] hover:bg-[#d97706] text-black font-bold py-3 px-6 uppercase tracking-wider text-sm flex items-center gap-2 transition-colors w-full sm:w-auto justify-center">
+              <Download className="w-5 h-5" />
+              Download Agent
+            </button>
+            <div className="absolute top-full left-0 w-full bg-[#111] border-2 border-[#f59e0b] hidden group-hover:block z-50 shadow-[4px_4px_0px_#f59e0b]">
+              <a 
+                href="/downloads/arqx-atlas-agent-setup.exe" 
+                download 
+                onClick={() => setDownloaded(true)}
+                className="block px-4 py-3 text-white hover:bg-[#f59e0b]/20 font-bold uppercase text-xs text-left transition-colors"
+              >
+                Windows (.exe)
+              </a>
+              <a 
+                href="/downloads/arqx-atlas-agent-desktop_2.0.0_all.deb" 
+                download 
+                onClick={() => setDownloaded(true)}
+                className="block px-4 py-3 text-white hover:bg-[#f59e0b]/20 font-bold uppercase text-xs text-left border-t border-white/10 transition-colors"
+              >
+                Linux (.deb)
+              </a>
+            </div>
+          </div>
           <a 
             href="arqx://start" 
             onClick={() => {

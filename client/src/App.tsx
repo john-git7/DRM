@@ -4,6 +4,7 @@ import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import LandingPage from './pages/LandingPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import { SecurityProvider, useSecurity } from './context/SecurityContext';
+import { AuthProvider } from './context/AuthContext';
 import { useDevTools } from './hooks/useDevTools';
 import { enableScreenProtection } from './utils/mobileProtection';
 
@@ -101,9 +102,11 @@ function AppShell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <SecurityProvider>
-        <AppShell />
-      </SecurityProvider>
+      <AuthProvider>
+        <SecurityProvider>
+          <AppShell />
+        </SecurityProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
