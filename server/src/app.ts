@@ -11,6 +11,11 @@ const app = express();
 app.use(helmet());
 app.use(globalLimiter);
 
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Allow any localhost origin (the dev client port varies: 5173/5174/5180…) plus an
 // explicit CLIENT_ORIGIN for non-local deploys. Non-localhost origins are rejected.
 const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;

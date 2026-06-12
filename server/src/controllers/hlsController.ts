@@ -107,6 +107,7 @@ export function issueKeyGrant(req: AuthenticatedRequest, res: Response, next: Ne
  */
 export function serveHlsKey(req: Request, res: Response, next: NextFunction): void {
   const videoId = path.basename(req.params.videoId);
+  console.log(`[HLS KEY] Attempting to serve key for videoId: ${videoId}`);
   const grant =
     (typeof req.query.grant === 'string' && req.query.grant) ||
     (typeof req.headers['x-key-grant'] === 'string' && (req.headers['x-key-grant'] as string)) ||

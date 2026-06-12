@@ -81,7 +81,7 @@ export default function VideoPlayer({
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (_evt, data) => {
         if (data.fatal) {
-          setLoadError('Secure stream failed to load. Your access may have expired.');
+          setLoadError(`HLS Error: ${data.type} - ${data.details}`);
         }
       });
       return () => hls.destroy();
