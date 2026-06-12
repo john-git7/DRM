@@ -13,7 +13,8 @@ import type { AuthenticatedRequest } from '../types/auth';
  * fields are sanitized and optional.
  */
 export function recordAudit(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
-  const username = 'demo-user';
+  // The route is JWT-guarded, so record the authenticated user, not a placeholder.
+  const username = req.user?.username ?? 'demo-user';
 
   const body = (req.body ?? {}) as Partial<AuditEntry>;
   if (typeof body.event !== 'string' || !body.event) {
@@ -34,6 +35,7 @@ export function recordAudit(req: AuthenticatedRequest, res: Response, next: Next
     agentStatus: typeof body.agentStatus === 'string' ? cap(body.agentStatus, 32) : undefined,
     recorders: Array.isArray(body.recorders) ? body.recorders.map((r) => cap(String(r), 64)).slice(0, 50) : undefined,
     watchTimeSec: typeof body.watchTimeSec === 'number' ? Math.max(0, Math.floor(body.watchTimeSec)) : undefined,
+    platform: typeof body.platform === 'string' ? cap(body.platform, 16) : undefined,
     userAgent: typeof req.headers['user-agent'] === 'string' ? cap(req.headers['user-agent'], 256) : undefined
   });
 

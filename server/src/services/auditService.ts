@@ -19,6 +19,8 @@ export interface AuditEntry {
   agentStatus?: string;
   recorders?: string[];
   watchTimeSec?: number;
+  /** 'mobile' | 'desktop' — client-reported platform for the session. */
+  platform?: string;
   userAgent?: string;
 }
 
