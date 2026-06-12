@@ -1,0 +1,14 @@
+[
+  {
+    "id": "video-1781238982527-817135488.mp4",
+    "title": "demo vid",
+    "originalName": "demo vid.mp4",
+    "filename": "video-1781238982527-817135488.mp4",
+    "size": 14657448,
+    "uploadDate": "2026-06-12T04:36:22.761Z",
+    "mimeType": "video/mp4",
+    "hlsStatus": "ready",
+    "hlsProgress": 100,
+    "hlsPlaylist": "/hls/video-1781238982527-817135488.mp4/index.m3u8"
+  }
+]

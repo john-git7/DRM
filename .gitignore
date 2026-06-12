@@ -1,9 +1,8 @@
-# Runtime content — never commit raw uploads, encrypted HLS output, decryption keys,
-# local enrollment data, or audit logs
-uploads/
-streams/
-server/data/videos.json
-server/data/keys.json
+# Runtime content (Commented out so you can commit your local videos and keys to GitHub!)
+# uploads/
+# streams/
+# server/data/videos.json
+# server/data/keys.json
 server/data/enrollments.json
 server/data/audit-log.json
 
