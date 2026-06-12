@@ -10,8 +10,8 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
  * Ensure required directories exist on startup
  */
 function ensureDirectories(): void {
-  const uploadsDir = path.join(__dirname, '../../uploads');
-  const streamsDir = path.join(__dirname, '../../streams');
+  const uploadsDir = path.join(__dirname, '../uploads');
+  const streamsDir = path.join(__dirname, '../streams');
   const dataDir = path.join(__dirname, '../data');
 
   if (!fs.existsSync(uploadsDir)) {
